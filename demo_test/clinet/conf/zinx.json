@@ -1,0 +1,8 @@
+{
+    "name":"ZinxServerApp",
+    "host":"0.0.0.0",
+    "port":8999,
+    "version":"V0.5",
+    "max_conn":500,
+    "max_package_size":1024
+}
