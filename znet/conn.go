@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/impact-eintr/Zinx/utils"
 	"github.com/impact-eintr/Zinx/ziface"
 )
 
@@ -95,7 +96,13 @@ func (c *Connection) StartReader() {
 		}
 
 		// 执行注册的路由方法
-		go c.MsgHandler.SendMsgToTaskQueue(&req)
+		if utils.GlobalConf.WorkerPoolSize > 0 {
+			go c.MsgHandler.SendMsgToTaskQueue(&req)
+
+		} else {
+			go c.MsgHandler.DoMsgHandler(&req)
+
+		}
 
 	}
 }
@@ -118,7 +125,6 @@ func (c *Connection) StartWriter() {
 			// 代表Reader已经退出, 此时Writer也应该退出
 			return
 		}
-
 	}
 }
 
