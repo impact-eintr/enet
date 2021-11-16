@@ -5,30 +5,30 @@ import (
 	"log"
 	"net"
 
-	"github.com/impact-eintr/Zinx/iface"
+	"github.com/impact-eintr/enet/iface"
 )
 
 type Connection struct {
 	Conn net.Conn
-	//当前连接的ID 也可以称作为SessionID，ID全局唯一
+	// 当前连接的ID 也可以称作为SessionID，ID全局唯一
 	ConnID uint32
-	//当前连接的关闭状态
+	// 当前连接的关闭状态
 	isClosed bool
 
-	//该连接的处理方法api
-	handleAPI iface.HandFunc
+	// 该连接的处理方法router 用来替代HandFunc 实现每个路由都有自己的处理方法
+	Router iface.IRouter
 
-	//告知该链接已经退出/停止的channel
+	// 告知该链接已经退出/停止的channel
 	ExitBuffChan chan bool
 }
 
-//创建Tcp连接的方法
-func NewTcpConntion(conn *net.TCPConn, connID uint32, callback_api iface.HandFunc) *Connection {
+// 创建Tcp连接的方法
+func NewTcpConntion(conn *net.TCPConn, connID uint32, router iface.IRouter) *Connection {
 	c := &Connection{
 		Conn:         conn,
 		ConnID:       connID,
 		isClosed:     false,
-		handleAPI:    callback_api,
+		Router:       router,
 		ExitBuffChan: make(chan bool, 1),
 	}
 
@@ -36,12 +36,12 @@ func NewTcpConntion(conn *net.TCPConn, connID uint32, callback_api iface.HandFun
 }
 
 //创建Udp连接的方法
-func NewUdpConntion(conn *net.UDPConn, connID uint32, callback_api iface.HandFunc) *Connection {
+func NewUdpConntion(conn *net.UDPConn, connID uint32, router iface.IRouter) *Connection {
 	c := &Connection{
 		Conn:         conn,
 		ConnID:       connID,
 		isClosed:     false,
-		handleAPI:    callback_api,
+		Router:       router,
 		ExitBuffChan: make(chan bool, 1),
 	}
 
@@ -56,19 +56,25 @@ func (c *Connection) StartTcpReader() {
 
 	for {
 		//读取我们最大的数据到buf中
-		buf := make([]byte, 512)
-		cnt, err := c.Conn.Read(buf)
+		buf := make([]byte, 1024)
+		_, err := c.Conn.Read(buf)
 		if err != nil {
 			fmt.Println("recv buf err ", err)
 			c.ExitBuffChan <- true
 			continue
 		}
-		//调用当前链接业务(这里执行的是当前conn的绑定的handle方法)
-		if err := c.handleAPI(c.Conn, buf, cnt); err != nil {
-			fmt.Println("connID ", c.ConnID, " handle is error")
-			c.ExitBuffChan <- true
-			return
+		//得到当前客户端请求的Request数据
+		req := Request{
+			conn: c,
+			data: buf,
 		}
+		//从路由Routers 中找到注册绑定Conn的对应Handle
+		go func(request iface.IRequest) {
+			//执行注册的路由方法
+			c.Router.PreHandle(request)
+			c.Router.Handle(request)
+			c.Router.PostHandle(request)
+		}(&req)
 	}
 }
 
@@ -78,21 +84,35 @@ func (c *Connection) StartUdpReader() {
 	defer c.Stop()
 
 	udpConn, _ := c.Conn.(*net.UDPConn)
-	data := make([]byte, 1024)
+	buf := make([]byte, 1024)
 	for {
 		log.Println(c.Conn.LocalAddr(), c.Conn.RemoteAddr())
-		n, remoteAddr, err := udpConn.ReadFromUDP(data)
+		n, remoteAddr, err := udpConn.ReadFromUDP(buf)
 		if err != nil {
 			fmt.Printf("error during read: %s", err)
 			c.ExitBuffChan <- true
 		}
 
-		//调用当前链接业务(这里执行的是当前conn的绑定的handle方法)
-		fmt.Printf("<%s> %s\n", remoteAddr, data[:n])
-		_, err = udpConn.WriteToUDP(data[:n], remoteAddr)
-		if err != nil {
-			fmt.Printf(err.Error())
+		//得到当前客户端请求的Request数据
+		req := Request{
+			conn:       c,
+			data:       buf,
+			remoteAddr: remoteAddr,
 		}
+		fmt.Printf("<%s> %s\n", remoteAddr, buf[:n])
+		//从路由Routers 中找到注册绑定Conn的对应Handle
+		go func(request iface.IRequest) {
+			//执行注册的路由方法
+			c.Router.PreHandle(request)
+			c.Router.Handle(request)
+			c.Router.PostHandle(request)
+		}(&req)
+
+		//调用当前链接业务(这里执行的是当前conn的绑定的handle方法)
+		//_, err = udpConn.WriteToUDP(data[:n], remoteAddr)
+		//if err != nil {
+		//	fmt.Printf(err.Error())
+		//}
 	}
 
 }

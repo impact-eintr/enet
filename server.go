@@ -1,13 +1,12 @@
 package enet
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"runtime"
 	"strings"
 
-	"github.com/impact-eintr/Zinx/iface"
+	"github.com/impact-eintr/enet/iface"
 )
 
 type Server struct {
@@ -19,6 +18,8 @@ type Server struct {
 	IP string
 	// 服务器绑定的端口
 	Port int
+	//当前Server由用户绑定的回调router,也就是Server注册的链接对应的处理业务
+	Router iface.IRouter
 }
 
 func (s *Server) Start() {
@@ -74,7 +75,7 @@ func (s *Server) Start() {
 
 				// TODO Server.Start() 处理该新链接请求的业务方法 每个 conn 对应一个 handler
 
-				dealConn := NewTcpConntion(conn, cid, CallBackToClient)
+				dealConn := NewTcpConntion(conn, cid, s.Router)
 				go dealConn.Start()
 			}
 		} else if _, ok := addr.(*net.UDPAddr); ok {
@@ -90,7 +91,7 @@ func (s *Server) Start() {
 			var cid uint32
 			cid = 0
 
-			dealConn := NewUdpConntion(udpConn, cid, CallBackToClient)
+			dealConn := NewUdpConntion(udpConn, cid, s.Router)
 			go dealConn.Start()
 
 		} else {
@@ -116,23 +117,18 @@ func (s *Server) Serve() {
 	}
 }
 
+func (s *Server) AddRouter(router iface.IRouter) {
+	s.Router = router
+	fmt.Println("Add Router succ! ")
+}
+
 func NewServer(name, network string) iface.IServer {
 	s := &Server{
 		Name:      name,
 		IPVersion: network, // TODO 这里注意之后的udp扩展
 		IP:        "0.0.0.0",
 		Port:      6430,
+		Router:    nil,
 	}
 	return s
-}
-
-//============== 定义当前客户端链接的handle api ===========
-func CallBackToClient(conn net.Conn, data []byte, cnt int) error {
-	//回显业务
-	fmt.Println("[Conn Handle] CallBackToClient ... ")
-	if _, err := conn.Write(data[:cnt]); err != nil {
-		fmt.Println("write back buf err ", err)
-		return errors.New("CallBackToClient error")
-	}
-	return nil
 }
