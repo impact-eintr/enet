@@ -1,16 +1,13 @@
 package enet
 
 import (
-	"context"
+	"errors"
 	"fmt"
-	"io"
 	"net"
 	"runtime"
 	"strings"
-	"syscall"
 
 	"github.com/impact-eintr/Zinx/iface"
-	"golang.org/x/sys/unix"
 )
 
 type Server struct {
@@ -28,65 +25,76 @@ func (s *Server) Start() {
 	fmt.Printf("[START] Server listenner at IP: %s, Port %d, is starting\n", s.IP, s.Port)
 
 	go func() {
-		cfg := net.ListenConfig{
-			Control: func(network, address string, c syscall.RawConn) error {
-				return c.Control(func(fd uintptr) {
-					syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, unix.SO_REUSEADDR, 1)
-					syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, unix.SO_REUSEPORT, 1)
-				})
-			},
+		// 1 获取一个tcp/udp的Addr
+		var addr net.Addr
+		var err error
+		switch s.IPVersion[0] {
+		case 't':
+			addr, err = net.ResolveTCPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
+		case 'u':
+			addr, err = net.ResolveUDPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
 		}
-
-		// 开始监听
-		listenner, err := cfg.Listen(context.Background(), s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
 		if err != nil {
-			fmt.Println("listen", s.IPVersion, listenner.Addr().String(), "err:", err)
+			fmt.Println("resolve tcp addr err: ", err)
 			return
 		}
 
-		//已经监听成功
-		fmt.Println("start enet server  ", s.Name, " succ, now listenning...")
-
-		// 启动server网络连接业务
-		for {
-			conn, err := listenner.Accept()
+		// 2 监听服务器地址/开启udp服务
+		if _, ok := addr.(*net.TCPAddr); ok {
+			// ========================= TCP业务 ==========================
+			listener, err := net.ListenTCP(s.IPVersion, addr.(*net.TCPAddr))
 			if err != nil {
-				if nerr, ok := err.(net.Error); ok && nerr.Temporary() {
-					fmt.Printf("temporary Accept() failure - %s", err)
-					runtime.Gosched()
-					continue
-				}
-				// theres no direct way to detect this error because it is not exposed
-				if !strings.Contains(err.Error(), "use of closed network connection") {
-					fmt.Printf("listener.Accept() error - %s", err)
-				}
-				break
-
+				fmt.Println("listen", s.IPVersion, "err", err)
+				return
 			}
-			// TODO Server.Start() 设置服务器最大链接控制
 
-			// TODO Server.Start() 处理该新链接请求的业务方法 每个 conn 对应一个 handler
+			//已经监听成功
+			fmt.Println("start enet server  ", s.Name, " succ, now listenning...")
 
-			go func() {
-				for {
-					buf := make([]byte, 512)
-					cnt, err := conn.Read(buf)
-					if err != nil {
-						if err == io.EOF {
-							fmt.Println("client exit!")
-							break
-						} else {
-							fmt.Println("recv buf err ", err)
-							continue
-						}
-					}
-					// echo
-					if _, err := conn.Write(buf[:cnt]); err != nil {
-						fmt.Println("write back buf err", err)
+			//TODO server.go 应该有一个自动生成ID的方法
+			var cid uint32
+			cid = 0
+
+			// 启动server网络连接业务
+			for {
+				conn, err := listener.AcceptTCP()
+				if err != nil {
+					if nerr, ok := err.(net.Error); ok && nerr.Temporary() {
+						fmt.Printf("temporary Accept() failure - %s", err)
+						runtime.Gosched()
 						continue
 					}
+					// theres no direct way to detect this error because it is not exposed
+					if !strings.Contains(err.Error(), "use of closed network connection") {
+						fmt.Printf("listener.Accept() error - %s", err)
+					}
+					break
 				}
-			}()
+				// TODO Server.Start() 设置服务器最大链接控制
+
+				// TODO Server.Start() 处理该新链接请求的业务方法 每个 conn 对应一个 handler
+
+				dealConn := NewTcpConntion(conn, cid, CallBackToClient)
+				go dealConn.Start()
+			}
+		} else if _, ok := addr.(*net.UDPAddr); ok {
+			// ========================= UDP业务 ==========================
+			udpConn, err := net.ListenUDP(s.IPVersion, addr.(*net.UDPAddr))
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			fmt.Printf("Local: <%s> \n", udpConn.LocalAddr().String())
+
+			//TODO server.go 应该有一个自动生成ID的方法
+			var cid uint32
+			cid = 0
+
+			dealConn := NewUdpConntion(udpConn, cid, CallBackToClient)
+			go dealConn.Start()
+
+		} else {
+			panic("invalid type")
 		}
 	}()
 }
@@ -116,4 +124,15 @@ func NewServer(name, network string) iface.IServer {
 		Port:      6430,
 	}
 	return s
+}
+
+//============== 定义当前客户端链接的handle api ===========
+func CallBackToClient(conn net.Conn, data []byte, cnt int) error {
+	//回显业务
+	fmt.Println("[Conn Handle] CallBackToClient ... ")
+	if _, err := conn.Write(data[:cnt]); err != nil {
+		fmt.Println("write back buf err ", err)
+		return errors.New("CallBackToClient error")
+	}
+	return nil
 }

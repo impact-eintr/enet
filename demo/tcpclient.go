@@ -8,9 +8,8 @@ import (
 
 func main() {
 
-	fmt.Println("Client Test ... start")
-	//3秒之后发起测试请求，给服务端开启服务的机会
-	time.Sleep(3 * time.Second)
+	fmt.Println("TCP Client Test ... start")
+	time.Sleep(1 * time.Second)
 
 	conn, err := net.Dial("tcp4", "127.0.0.1:6430")
 	if err != nil {
