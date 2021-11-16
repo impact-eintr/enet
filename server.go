@@ -122,12 +122,12 @@ func (s *Server) AddRouter(router iface.IRouter) {
 	fmt.Println("Add Router succ! ")
 }
 
-func NewServer(name, network string) iface.IServer {
+func NewServer(network string) iface.IServer {
 	s := &Server{
-		Name:      name,
+		Name:      GlobalObject.Name,
 		IPVersion: network, // TODO 这里注意之后的udp扩展
-		IP:        "0.0.0.0",
-		Port:      6430,
+		IP:        GlobalObject.Host,
+		Port:      GlobalObject.Port,
 		Router:    nil,
 	}
 	return s

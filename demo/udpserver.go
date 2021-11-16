@@ -36,7 +36,7 @@ func (this *PongRouter) PostHandle(request iface.IRequest) {
 
 func main() {
 	//1 创建一个server 句柄 s
-	s := enet.NewServer("[enetv1.0]", "udp")
+	s := enet.NewServer("udp")
 
 	s.AddRouter(&PongRouter{})
 

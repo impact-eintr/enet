@@ -1,0 +1,5 @@
+{
+    "Name":"demo server",
+    "Host":"127.0.0.1",
+    "MaxConn":3
+}
