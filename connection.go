@@ -1,6 +1,7 @@
 package enet
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -16,32 +17,32 @@ type Connection struct {
 	// 当前连接的关闭状态
 	isClosed bool
 
-	// 该连接的处理方法router 用来替代HandFunc 实现每个路由都有自己的处理方法
-	Router iface.IRouter
+	// 消息管理MsgId和对应处理方法的消息管理模块(多路由实现)
+	MsgHandler iface.IMsgHandle
 
 	// 告知该链接已经退出/停止的channel
 	ExitBuffChan chan bool
 }
 
 // 创建Tcp连接的方法
-func NewTcpConntion(conn *net.TCPConn, connID uint32, router iface.IRouter) *Connection {
+func NewTcpConntion(conn *net.TCPConn, connID uint32, msgHandler iface.IMsgHandle) *Connection {
 	c := &Connection{
 		Conn:         conn,
 		ConnID:       connID,
 		isClosed:     false,
-		Router:       router,
+		MsgHandler:   msgHandler,
 		ExitBuffChan: make(chan bool, 1),
 	}
 	return c
 }
 
 //创建Udp连接的方法
-func NewUdpConntion(conn *net.UDPConn, connID uint32, router iface.IRouter) *Connection {
+func NewUdpConntion(conn *net.UDPConn, connID uint32, msgHandler iface.IMsgHandle) *Connection {
 	c := &Connection{
 		Conn:         conn,
 		ConnID:       connID,
 		isClosed:     false,
-		Router:       router,
+		MsgHandler:   msgHandler,
 		ExitBuffChan: make(chan bool, 1),
 	}
 	return c
@@ -65,7 +66,7 @@ func (c *Connection) StartTcpReader() {
 			continue
 		}
 
-		//拆包，得到msgid 和 datalen 放在msg中
+		// 拆包，得到msgid 和 datalen 放在msg中
 		msg, err := dp.Unpack(headData)
 		if err != nil {
 			fmt.Println("unpack error ", err)
@@ -73,7 +74,7 @@ func (c *Connection) StartTcpReader() {
 			continue
 		}
 
-		//根据 dataLen 读取 data，放在msg.Data中
+		// 根据 dataLen 读取 data，放在msg.Data中
 		var data []byte
 		if msg.GetDataLen() > 0 {
 			data = make([]byte, msg.GetDataLen())
@@ -85,24 +86,19 @@ func (c *Connection) StartTcpReader() {
 		}
 		msg.SetData(data)
 
-		//得到当前客户端请求的Request数据
+		// 得到当前客户端请求的Request数据
 		req := Request{
 			conn: c,
 			msg:  msg,
 		}
-		//从路由Routers 中找到注册绑定Conn的对应Handle
-		go func(request iface.IRequest) {
-			//执行注册的路由方法
-			c.Router.PreHandle(request)
-			c.Router.Handle(request)
-			c.Router.PostHandle(request)
-		}(&req)
+		// 从绑定好的消息和对应的处理方法中执行对应的Handle方法
+		go c.MsgHandler.DoMsgHandler(&req)
 	}
 }
 
 /* 处理udp conn读数据的Goroutine */
 func (c *Connection) StartUdpReader() {
-	fmt.Println("Reader Goroutine is  running")
+	fmt.Println("Reader Goroutine is running")
 	defer c.Stop()
 
 	buf := make([]byte, GlobalObject.MaxPacketSize)
@@ -115,24 +111,22 @@ func (c *Connection) StartUdpReader() {
 			c.ExitBuffChan <- true
 		}
 
-		msg := &Message{Data: buf[:n]}
+		// 解码 构建消息
+		msgId := binary.BigEndian.Uint32(buf[0:4])
+		msg := &Message{Data: buf[:n], Id: msgId}
 
-		//得到当前客户端请求的Request数据
+		// 得到当前客户端请求的Request数据
 		req := Request{
 			conn:       c,
 			msg:        msg,
 			remoteAddr: remoteAddr,
 		}
-		fmt.Printf("<%s> %s\n", remoteAddr, buf[:n])
-		//从路由Routers 中找到注册绑定Conn的对应Handle
-		go func(request iface.IRequest) {
-			//执行注册的路由方法
-			c.Router.PreHandle(request)
-			c.Router.Handle(request)
-			c.Router.PostHandle(request)
-		}(&req)
-	}
 
+		fmt.Printf("<%s> %s\n", remoteAddr, buf[4:n])
+
+		// 从绑定好的消息和对应的处理方法中执行对应的Handle方法
+		go c.MsgHandler.DoMsgHandler(&req)
+	}
 }
 
 // 启动连接

@@ -16,14 +16,14 @@ func main() {
 
 	conn, err := net.Dial("tcp4", "127.0.0.1:6430")
 	if err != nil {
-		fmt.Println("client start err, exit!")
+		fmt.Println("client start err, exit!", err)
 		return
 	}
 
 	for {
 		//发封包message消息
 		dp := enet.NewDataPack()
-		msg, _ := dp.Pack(enet.NewMsgPackage(0, []byte("enet V1.0 Client Test Message")))
+		msg, _ := dp.Pack(enet.NewMsgPackage(1, []byte("enet V1.0 Client Test Message")))
 		_, err := conn.Write(msg)
 		if err != nil {
 			fmt.Println("write error err ", err)

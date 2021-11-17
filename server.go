@@ -18,8 +18,8 @@ type Server struct {
 	IP string
 	// 服务器绑定的端口
 	Port int
-	//当前Server由用户绑定的回调router,也就是Server注册的链接对应的处理业务
-	Router iface.IRouter
+	//当前Server的消息管理模块，用来绑定MsgId和对应的处理方法
+	msgHandler iface.IMsgHandle
 }
 
 func (s *Server) Start() {
@@ -75,7 +75,7 @@ func (s *Server) Start() {
 
 				// TODO Server.Start() 处理该新链接请求的业务方法 每个 conn 对应一个 handler
 
-				dealConn := NewTcpConntion(conn, cid, s.Router)
+				dealConn := NewTcpConntion(conn, cid, s.msgHandler)
 				go dealConn.Start()
 			}
 		} else if _, ok := addr.(*net.UDPAddr); ok {
@@ -87,13 +87,12 @@ func (s *Server) Start() {
 			}
 			fmt.Printf("Local: <%s> \n", udpConn.LocalAddr().String())
 
-			//TODO server.go 应该有一个自动生成ID的方法
+			// TODO server.go 应该有一个自动生成ID的方法
 			var cid uint32
 			cid = 0
 
-			dealConn := NewUdpConntion(udpConn, cid, s.Router)
+			dealConn := NewUdpConntion(udpConn, cid, s.msgHandler)
 			go dealConn.Start()
-
 		} else {
 			panic("invalid type")
 		}
@@ -117,18 +116,17 @@ func (s *Server) Serve() {
 	}
 }
 
-func (s *Server) AddRouter(router iface.IRouter) {
-	s.Router = router
-	fmt.Println("Add Router succ! ")
+func (s *Server) AddRouter(msgId uint32, router iface.IRouter) {
+	s.msgHandler.AddRouter(msgId, router)
 }
 
 func NewServer(network string) iface.IServer {
 	s := &Server{
-		Name:      GlobalObject.Name,
-		IPVersion: network,
-		IP:        GlobalObject.Host,
-		Port:      GlobalObject.Port,
-		Router:    nil,
+		Name:       GlobalObject.Name,
+		IPVersion:  network,
+		IP:         GlobalObject.Host,
+		Port:       GlobalObject.Port,
+		msgHandler: NewMsgHandler(), //msgHandler 初始化
 	}
 	return s
 }

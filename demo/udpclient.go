@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"time"
@@ -18,7 +19,11 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		_, err = conn.WriteToUDP([]byte(localhost), dstAddr)
+
+		buf := make([]byte, 4)
+		binary.BigEndian.PutUint32(buf[0:4], 1)
+		buf = append(buf, []byte(localhost)...)
+		_, err = conn.WriteToUDP(buf[:], dstAddr)
 		if err != nil {
 			fmt.Println(err)
 		}

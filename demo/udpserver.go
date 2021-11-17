@@ -39,7 +39,8 @@ func main() {
 	//1 创建一个server 句柄 s
 	s := enet.NewServer("udp")
 
-	s.AddRouter(&PongRouter{})
+	s.AddRouter(0, &PongRouter{})
+	s.AddRouter(1, &PongRouter{})
 
 	//2 开启服务
 	s.Serve()
