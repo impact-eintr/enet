@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"net"
+	"log"
+	"time"
 
 	"github.com/impact-eintr/enet"
 	"github.com/impact-eintr/enet/iface"
@@ -13,25 +14,25 @@ type PongRouter struct {
 	enet.BaseRouter //一定要先基础BaseRouter
 }
 
-//Test PreHandle
-func (this *PongRouter) PreHandle(request iface.IRequest) {
-	fmt.Println("Call Router PreHandle 🤤")
-}
+var m = make(map[string]time.Time, 0) // 计数器
 
-//Test Handle
+// 心跳监控
 func (this *PongRouter) Handle(request iface.IRequest) {
-	fmt.Println("Call PongRouter Handle 🥵")
+	// 先更新
+	m[string(request.GetData())] = time.Now()
 
-	udpConn, _ := request.GetConnection().GetRawConnection().(*net.UDPConn)
-	_, err := udpConn.WriteToUDP(request.GetData(), request.GetRemoteAddr())
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
+	fmt.Printf("来自<%s>的心跳 %s\n", request.GetRemoteAddr().String(), string(request.GetData()))
 }
 
-//Test PostHandle
 func (this *PongRouter) PostHandle(request iface.IRequest) {
-	fmt.Println("Call Router PostHandle 👋")
+	// 然后检查失效节点
+	for k, t := range m {
+		fmt.Println(t)
+		if t.Add(2 * time.Second).Before(time.Now()) {
+			delete(m, k)
+			log.Printf("<%s>失效\n", k)
+		}
+	}
 }
 
 func main() {

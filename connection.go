@@ -32,7 +32,6 @@ func NewTcpConntion(conn *net.TCPConn, connID uint32, router iface.IRouter) *Con
 		Router:       router,
 		ExitBuffChan: make(chan bool, 1),
 	}
-
 	return c
 }
 
@@ -45,7 +44,6 @@ func NewUdpConntion(conn *net.UDPConn, connID uint32, router iface.IRouter) *Con
 		Router:       router,
 		ExitBuffChan: make(chan bool, 1),
 	}
-
 	return c
 }
 
@@ -107,8 +105,9 @@ func (c *Connection) StartUdpReader() {
 	fmt.Println("Reader Goroutine is  running")
 	defer c.Stop()
 
-	udpConn, _ := c.Conn.(*net.UDPConn)
 	buf := make([]byte, GlobalObject.MaxPacketSize)
+
+	udpConn, _ := c.Conn.(*net.UDPConn)
 	for {
 		n, remoteAddr, err := udpConn.ReadFromUDP(buf)
 		if err != nil {
@@ -132,12 +131,6 @@ func (c *Connection) StartUdpReader() {
 			c.Router.Handle(request)
 			c.Router.PostHandle(request)
 		}(&req)
-
-		//调用当前链接业务(这里执行的是当前conn的绑定的handle方法)
-		//_, err = udpConn.WriteToUDP(data[:n], remoteAddr)
-		//if err != nil {
-		//	fmt.Printf(err.Error())
-		//}
 	}
 
 }

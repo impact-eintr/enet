@@ -125,7 +125,7 @@ func (s *Server) AddRouter(router iface.IRouter) {
 func NewServer(network string) iface.IServer {
 	s := &Server{
 		Name:      GlobalObject.Name,
-		IPVersion: network, // TODO 这里注意之后的udp扩展
+		IPVersion: network,
 		IP:        GlobalObject.Host,
 		Port:      GlobalObject.Port,
 		Router:    nil,
