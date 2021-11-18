@@ -27,13 +27,13 @@ func (dp *DataPack) Pack(msg iface.IMessage) ([]byte, error) {
 	//创建一个存放bytes字节的缓冲
 	dataBuff := bytes.NewBuffer([]byte{})
 
-	//写dataLen
-	if err := binary.Write(dataBuff, binary.BigEndian, msg.GetDataLen()); err != nil {
+	//写msgID
+	if err := binary.Write(dataBuff, binary.BigEndian, msg.GetMsgId()); err != nil {
 		return nil, err
 	}
 
-	//写msgID
-	if err := binary.Write(dataBuff, binary.BigEndian, msg.GetMsgId()); err != nil {
+	//写dataLen
+	if err := binary.Write(dataBuff, binary.BigEndian, msg.GetDataLen()); err != nil {
 		return nil, err
 	}
 
@@ -53,13 +53,13 @@ func (dp *DataPack) Unpack(binaryData []byte) (iface.IMessage, error) {
 	//只解压head的信息，得到dataLen和msgID
 	msg := &Message{}
 
-	//读dataLen
-	if err := binary.Read(dataBuff, binary.BigEndian, &msg.DataLen); err != nil {
+	//读msgID
+	if err := binary.Read(dataBuff, binary.BigEndian, &msg.Id); err != nil {
 		return nil, err
 	}
 
-	//读msgID
-	if err := binary.Read(dataBuff, binary.BigEndian, &msg.Id); err != nil {
+	//读dataLen
+	if err := binary.Read(dataBuff, binary.BigEndian, &msg.DataLen); err != nil {
 		return nil, err
 	}
 
@@ -70,4 +70,18 @@ func (dp *DataPack) Unpack(binaryData []byte) (iface.IMessage, error) {
 
 	//这里只需要把head的数据拆包出来就可以了，然后再通过head的长度，再从conn读取一次数据
 	return msg, nil
+}
+
+func (dp *DataPack) Decode(buf []byte) iface.IMessage {
+	// 解码 构建消息
+	msgId := binary.BigEndian.Uint32(buf[0:4])
+	msg := &Message{Data: buf[4:], Id: msgId}
+	return msg
+}
+
+func (dp *DataPack) Encode(msg iface.IMessage) []byte {
+	buf := make([]byte, msg.GetDataLen()+4)
+	binary.BigEndian.PutUint32(buf[0:4], msg.GetMsgId())
+	copy(buf[4:], msg.GetData())
+	return buf
 }

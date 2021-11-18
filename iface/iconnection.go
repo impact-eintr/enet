@@ -7,12 +7,15 @@ type IConnection interface {
 	Start()
 	// 停止连接
 	Stop()
-	// 从当前连接中获取原始的docket
-	GetRawConnection() net.Conn
+	// 从当前连接中获取原始的tcp socket
+	GetTcpConnection() *net.TCPConn
+	// 从当前连接中获取原始的udp socket
+	GetUdpConnection() *net.UDPConn
 	// 获取当前连的ID
 	GetConnID() uint32
 	// 获取远程客户端地址信息
 	RemoteAddr() net.Addr
-	//直接将Message数据发送数据给远程的TCP客户端
-	SendMsg(msgId uint32, data []byte) error
+	//直接将Message数据发送数据给远程的客户端
+	SendTcpMsg(msgId uint32, data []byte) error
+	SendUdpMsg(msgId uint32, data []byte, dst *net.UDPAddr) error
 }

@@ -22,6 +22,10 @@ func (this *PongRouter) Handle(request iface.IRequest) {
 	m[string(request.GetData())] = time.Now()
 
 	fmt.Printf("来自<%s>的心跳 %s\n", request.GetRemoteAddr().String(), string(request.GetData()))
+	err := request.GetConnection().SendUdpMsg(0, []byte("pong...pong...pong"), request.GetRemoteAddr())
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func (this *PongRouter) PostHandle(request iface.IRequest) {
