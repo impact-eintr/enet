@@ -26,6 +26,9 @@ func (s *Server) Start() {
 	fmt.Printf("[START] Server listenner at IP: %s, Port %d, is starting\n", s.IP, s.Port)
 
 	go func() {
+		//0 启动worker工作池机制
+		s.msgHandler.StartWorkerPool()
+
 		// 1 获取一个tcp/udp的Addr
 		var addr net.Addr
 		var err error

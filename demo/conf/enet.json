@@ -1,5 +1,7 @@
 {
     "Name":"demo server",
     "Host":"0.0.0.0",
-    "MaxConn":3
+    "MaxConn":3,
+    "WorkerPoolSize": 8,
+    "MaxWorkerTaskLen": 10
 }

@@ -14,8 +14,15 @@ type GlobalObj struct {
 	Name      string        // 当前服务器名称
 	Version   string        // 当前版本号
 
-	MaxPacketSize uint32 //都需数据包的最大值
-	MaxConn       int    //当前服务器主机允许的最大链接个数
+	MaxPacketSize    uint32 //都需数据包的最大值
+	MaxConn          int    //当前服务器主机允许的最大链接个数
+	WorkerPoolSize   uint32 //业务工作Worker池的数量
+	MaxWorkerTaskLen uint32 //业务工作Worker对应负责的任务队列最大任务存储数量
+
+	/*
+		config file path
+	*/
+	ConfFilePath string
 }
 
 var GlobalObject *GlobalObj
@@ -27,7 +34,6 @@ func (g *GlobalObj) Reload() {
 		panic(err)
 	}
 	// 将json数据解析到struct中
-	// fmt.Printf("json :%s\n", data)
 	err = json.Unmarshal(data, &GlobalObject)
 	if err != nil {
 		panic(err)

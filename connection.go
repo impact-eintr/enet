@@ -91,8 +91,16 @@ func (c *Connection) StartTcpReader() {
 			conn: c,
 			msg:  msg,
 		}
-		// 从绑定好的消息和对应的处理方法中执行对应的Handle方法
-		go c.MsgHandler.DoMsgHandler(&req)
+
+		if GlobalObject.WorkerPoolSize > 0 {
+			// 将任务派发给已经存在的goroutine
+			// 已经启动工作池机制，将消息交给Worker处理
+			c.MsgHandler.SendMsgToTaskQueue(&req)
+		} else {
+			// 开启新的gouroutine 来处理这些消息
+			// 从绑定好的消息和对应的处理方法中执行对应的Handle方法
+			go c.MsgHandler.DoMsgHandler(&req)
+		}
 	}
 }
 
@@ -180,8 +188,15 @@ func (c *Connection) StartUdpReader() {
 		fmt.Printf("<%s> %s\n", remoteAddr, buf[4:n])
 		fmt.Printf("<%s> \n", c.UdpConn.RemoteAddr())
 
-		// 从绑定好的消息和对应的处理方法中执行对应的Handle方法
-		go c.MsgHandler.DoMsgHandler(&req)
+		if GlobalObject.WorkerPoolSize > 0 {
+			// 将任务派发给已经存在的goroutine
+			// 已经启动工作池机制，将消息交给Worker处理
+			c.MsgHandler.SendMsgToTaskQueue(&req)
+		} else {
+			// 开启新的gouroutine 来处理这些消息
+			// 从绑定好的消息和对应的处理方法中执行对应的Handle方法
+			go c.MsgHandler.DoMsgHandler(&req)
+		}
 	}
 }
 
