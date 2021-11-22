@@ -9,18 +9,18 @@ import (
 )
 
 func main() {
-	localhost := "10.29.1.3:12345"
+	localhost := "10.29.1.2:12345"
 	ip := net.ParseIP("192.168.47.255")
 
 	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
 	dstAddr := &net.UDPAddr{IP: ip, Port: 6430}
 
-	for {
-		conn, err := net.ListenUDP("udp", srcAddr)
-		if err != nil {
-			fmt.Println(err)
-		}
+	conn, err := net.ListenUDP("udp", srcAddr)
+	if err != nil {
+		fmt.Println(err)
+	}
 
+	for {
 		buf := make([]byte, 4)
 		binary.BigEndian.PutUint32(buf[0:4], 1)
 		buf = append(buf, []byte(localhost)...)

@@ -14,11 +14,11 @@ type GlobalObj struct {
 	Name      string        // 当前服务器名称
 	Version   string        // 当前版本号
 
-	MaxPacketSize    uint32 //都需数据包的最大值
-	MaxConn          int    //当前服务器主机允许的最大链接个数
-	WorkerPoolSize   uint32 //业务工作Worker池的数量
-	MaxWorkerTaskLen uint32 //业务工作Worker对应负责的任务队列最大任务存储数量
-
+	MaxPacketSize    uint32 // 都需数据包的最大值
+	MaxConn          int    // 当前服务器主机允许的最大链接个数
+	WorkerPoolSize   uint32 // 业务工作Worker池的数量
+	MaxWorkerTaskLen uint32 // 业务工作Worker对应负责的任务队列最大任务存储数量
+	MaxMsgChanLen    uint32 // 消息缓冲管道长度
 	/*
 		config file path
 	*/
@@ -46,14 +46,16 @@ func (g *GlobalObj) Reload() {
 func init() {
 	// 初始化GlobalObject变量，设置一些默认值
 	GlobalObject = &GlobalObj{
-		Name:          "enetServerApp",
-		Version:       "V1.0",
-		Port:          6430,
-		Host:          "0.0.0.0",
-		MaxConn:       1000,
-		MaxPacketSize: 4096,
+		Name:             "enetServerApp",
+		Version:          "V1.0",
+		Port:             6430,
+		Host:             "0.0.0.0",
+		MaxConn:          1000,
+		MaxPacketSize:    4096,
+		WorkerPoolSize:   0, // 默认不开启任务池
+		MaxWorkerTaskLen: 0,
+		MaxMsgChanLen:    64,
 	}
-
 	// 从配置文件中加载一些用户配置的参数
 	GlobalObject.Reload()
 }

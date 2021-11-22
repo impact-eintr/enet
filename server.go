@@ -18,13 +18,37 @@ type Server struct {
 	IP string
 	// 服务器绑定的端口
 	Port int
-	//当前Server的消息管理模块，用来绑定MsgId和对应的处理方法
+	// 当前Server的消息管理模块，用来绑定MsgId和对应的处理方法
 	msgHandler iface.IMsgHandle
+	// 当前Server的链接管理器
+	ConnMgr iface.IConnManager
+	// =======================
+	//新增两个hook函数原型
+
+	// 该Server的连接创建时Hook函数
+	OnConnStart func(conn iface.IConnection)
+	// 该Server的连接断开时的Hook函数
+	OnConnStop func(conn iface.IConnection)
+}
+
+func NewServer(network string) iface.IServer {
+	s := &Server{
+		Name:       GlobalObject.Name,
+		IPVersion:  network,
+		IP:         GlobalObject.Host,
+		Port:       GlobalObject.Port,
+		msgHandler: NewMsgHandler(),  //msgHandler 初始化
+		ConnMgr:    NewConnManager(), //创建ConnManager
+	}
+	return s
 }
 
 func (s *Server) Start() {
 	fmt.Printf("[START] Server listenner at IP: %s, Port %d, is starting\n", s.IP, s.Port)
-
+	fmt.Printf("[LOG] Version: %s, MaxConn: %d, MaxPacketSize: %d\n",
+		GlobalObject.Version,
+		GlobalObject.MaxConn,
+		GlobalObject.MaxPacketSize)
 	go func() {
 		//0 启动worker工作池机制
 		s.msgHandler.StartWorkerPool()
@@ -74,28 +98,35 @@ func (s *Server) Start() {
 					}
 					break
 				}
-				// TODO Server.Start() 设置服务器最大链接控制
+				//  设置服务器最大链接控制
+				if s.ConnMgr.Len() >= GlobalObject.MaxConn {
+					conn.Close()
+					continue
+				}
 
-				// TODO Server.Start() 处理该新链接请求的业务方法 每个 conn 对应一个 handler
+				dealConn := NewTcpConntion(s, conn, cid, s.msgHandler)
+				cid++
 
-				dealConn := NewTcpConntion(conn, cid, s.msgHandler)
+				// 开始处理业务
 				go dealConn.Start()
 			}
 		} else if _, ok := addr.(*net.UDPAddr); ok {
-			// ========================= UDP业务 ==========================
-			udpConn, err := net.ListenUDP(s.IPVersion, addr.(*net.UDPAddr))
-			if err != nil {
-				fmt.Println(err)
-				return
+			for {
+				// ========================= UDP业务 ==========================
+				udpConn, err := net.ListenUDP(s.IPVersion, addr.(*net.UDPAddr))
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+				fmt.Printf("Local: <%s> \n", udpConn.LocalAddr().String())
+
+				// udp不设置连接控制
+				dealConn := NewUdpConntion(s, udpConn, 0, s.msgHandler)
+
+				// 开始处理业务
+				go dealConn.Start()
+
 			}
-			fmt.Printf("Local: <%s> \n", udpConn.LocalAddr().String())
-
-			// TODO server.go 应该有一个自动生成ID的方法
-			var cid uint32
-			cid = 0
-
-			dealConn := NewUdpConntion(udpConn, cid, s.msgHandler)
-			go dealConn.Start()
 		} else {
 			panic("invalid type")
 		}
@@ -103,9 +134,10 @@ func (s *Server) Start() {
 }
 
 func (s *Server) Stop() {
-	fmt.Println("[STOP] Zinx server , name ", s.Name)
+	fmt.Println("[STOP] enet server , name ", s.Name)
 
-	//TODO  Server.Stop() 将其他需要清理的连接信息或者其他信息 也要一并停止或者清理
+	// 将其他需要清理的连接信息或者其他信息 也要一并停止或者清理
+	s.ConnMgr.ClearConn()
 }
 
 func (s *Server) Serve() {
@@ -123,13 +155,33 @@ func (s *Server) AddRouter(msgId uint32, router iface.IRouter) {
 	s.msgHandler.AddRouter(msgId, router)
 }
 
-func NewServer(network string) iface.IServer {
-	s := &Server{
-		Name:       GlobalObject.Name,
-		IPVersion:  network,
-		IP:         GlobalObject.Host,
-		Port:       GlobalObject.Port,
-		msgHandler: NewMsgHandler(), //msgHandler 初始化
+// 得到链接管理
+func (s *Server) GetConnMgr() iface.IConnManager {
+	return s.ConnMgr
+}
+
+//设置该Server的连接创建时Hook函数
+func (s *Server) SetOnConnStart(hookFunc func(iface.IConnection)) {
+	s.OnConnStart = hookFunc
+}
+
+//设置该Server的连接断开时的Hook函数
+func (s *Server) SetOnConnStop(hookFunc func(iface.IConnection)) {
+	s.OnConnStop = hookFunc
+}
+
+//调用连接OnConnStart Hook函数
+func (s *Server) CallOnConnStart(conn iface.IConnection) {
+	if s.OnConnStart != nil {
+		fmt.Println("---> CallOnConnStart....")
+		s.OnConnStart(conn)
 	}
-	return s
+}
+
+//调用连接OnConnStop Hook函数
+func (s *Server) CallOnConnStop(conn iface.IConnection) {
+	if s.OnConnStop != nil {
+		fmt.Println("---> CallOnConnStop....")
+		s.OnConnStop(conn)
+	}
 }

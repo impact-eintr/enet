@@ -22,7 +22,9 @@ func (this *PongRouter) Handle(request iface.IRequest) {
 	m[string(request.GetData())] = time.Now()
 
 	fmt.Printf("来自<%s>的心跳 %s\n", request.GetRemoteAddr().String(), string(request.GetData()))
-	err := request.GetConnection().SendUdpMsg(0, []byte("pong...pong...pong"), request.GetRemoteAddr())
+
+	err := request.GetConnection().SendBuffUdpMsg(0,
+		[]byte("pong...pong...pong"), request.GetRemoteAddr())
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -31,7 +33,6 @@ func (this *PongRouter) Handle(request iface.IRequest) {
 func (this *PongRouter) PostHandle(request iface.IRequest) {
 	// 然后检查失效节点
 	for k, t := range m {
-		fmt.Println(t)
 		if t.Add(2 * time.Second).Before(time.Now()) {
 			delete(m, k)
 			log.Printf("<%s>失效\n", k)
@@ -39,7 +40,7 @@ func (this *PongRouter) PostHandle(request iface.IRequest) {
 	}
 }
 
-func main() {
+func ListenHeartBeat() {
 	//1 创建一个server 句柄 s
 	s := enet.NewServer("udp")
 
@@ -48,4 +49,16 @@ func main() {
 
 	//2 开启服务
 	s.Serve()
+}
+
+func main() {
+	go ListenHeartBeat()
+
+	for {
+		for k := range m {
+			fmt.Printf("%s ", k)
+		}
+		time.Sleep(5 * time.Second)
+	}
+
 }

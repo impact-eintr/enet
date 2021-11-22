@@ -2,8 +2,9 @@ package enet
 
 import (
 	"fmt"
-	"log"
+	"math/rand"
 	"strconv"
+	"time"
 
 	"github.com/impact-eintr/enet/iface"
 )
@@ -24,7 +25,6 @@ func NewMsgHandler() *MsgHandle {
 
 // 马上以非阻塞的方式处理消息
 func (mh *MsgHandle) DoMsgHandler(request iface.IRequest) {
-	log.Printf("\nthis is msg[%d]\n\n", request.GetMsgID())
 	handler, ok := mh.Apis[request.GetMsgID()]
 	if !ok {
 		fmt.Println("api msgId = ", request.GetMsgID(), " is not FOUND!")
@@ -76,11 +76,13 @@ func (mh *MsgHandle) StartWorkerPool() {
 // 将消息交给TaskQueue,由worker进行处理
 func (mh *MsgHandle) SendMsgToTaskQueue(request iface.IRequest) {
 	// 根据ConnID来分配当前的连接应该由哪个worker负责处理
-	// 轮询的平均分配法则
+	// 随机数分配原则
 
 	// 得到需要处理此条连接的workerID
-	workerID := request.GetConnection().GetConnID() % mh.WorkerPoolSize
-	fmt.Println("Add ConnID=", request.GetConnection().GetConnID(), " request msgID=", request.GetMsgID(), "to workerID=", workerID)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	workerID := r.Intn(int(mh.WorkerPoolSize))
+	fmt.Println("Add ConnID=", request.GetConnection().GetConnID(),
+		" request msgID=", request.GetMsgID(), "to workerID=", workerID)
 	// 将请求消息发送给任务队列
 	mh.TaskQueue[workerID] <- request
 }
