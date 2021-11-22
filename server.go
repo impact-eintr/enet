@@ -53,24 +53,11 @@ func (s *Server) Start() {
 		//0 启动worker工作池机制
 		s.msgHandler.StartWorkerPool()
 
-		// 1 获取一个tcp/udp的Addr
-		var addr net.Addr
-		var err error
-		switch s.IPVersion[0] {
-		case 't':
-			addr, err = net.ResolveTCPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
-		case 'u':
-			addr, err = net.ResolveUDPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
-		}
-		if err != nil {
-			fmt.Println("resolve tcp addr err: ", err)
-			return
-		}
-
 		// 2 监听服务器地址/开启udp服务
-		if _, ok := addr.(*net.TCPAddr); ok {
+		if s.IPVersion[0] == 't' {
 			// ========================= TCP业务 ==========================
-			listener, err := net.ListenTCP(s.IPVersion, addr.(*net.TCPAddr))
+			listener, err := net.ListenTCP(s.IPVersion,
+				&net.TCPAddr{IP: net.ParseIP(s.IP), Port: s.Port})
 			if err != nil {
 				fmt.Println("listen", s.IPVersion, "err", err)
 				return
@@ -110,23 +97,21 @@ func (s *Server) Start() {
 				// 开始处理业务
 				go dealConn.Start()
 			}
-		} else if _, ok := addr.(*net.UDPAddr); ok {
-			for {
-				// ========================= UDP业务 ==========================
-				udpConn, err := net.ListenUDP(s.IPVersion, addr.(*net.UDPAddr))
-				if err != nil {
-					fmt.Println(err)
-					return
-				}
-				fmt.Printf("Local: <%s> \n", udpConn.LocalAddr().String())
-
-				// udp不设置连接控制
-				dealConn := NewUdpConntion(s, udpConn, 0, s.msgHandler)
-
-				// 开始处理业务
-				go dealConn.Start()
-
+		} else if s.IPVersion[0] == 'u' {
+			// ========================= UDP业务 ==========================
+			udpConn, err := net.ListenUDP(s.IPVersion,
+				&net.UDPAddr{IP: net.ParseIP(s.IP), Port: s.Port})
+			if err != nil {
+				fmt.Println(err)
+				return
 			}
+			//fmt.Printf("Local: <%s> \n", udpConn.LocalAddr().String())
+
+			// udp不设置连接控制
+			dealConn := NewUdpConntion(s, udpConn, 0, s.msgHandler)
+
+			// 开始处理业务
+			go dealConn.Start()
 		} else {
 			panic("invalid type")
 		}

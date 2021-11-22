@@ -217,9 +217,8 @@ func (c *Connection) StartUdpReader() {
 	fmt.Println("Reader Goroutine is running")
 	defer c.Stop()
 
-	buf := make([]byte, GlobalObject.MaxPacketSize)
-
 	for {
+		buf := make([]byte, GlobalObject.MaxPacketSize)
 		n, remoteAddr, err := c.Conn.(*net.UDPConn).ReadFromUDP(buf)
 		if err != nil {
 			fmt.Printf("error during read: %s", err)
@@ -228,7 +227,7 @@ func (c *Connection) StartUdpReader() {
 
 		// 解码 构建消息
 		dp := NewDataPack()
-		msg := dp.Decode(buf)
+		msg := dp.Decode(buf[:n])
 
 		// 得到当前客户端请求的Request数据
 		req := Request{
@@ -236,8 +235,6 @@ func (c *Connection) StartUdpReader() {
 			msg:        msg,
 			remoteAddr: remoteAddr,
 		}
-
-		fmt.Printf("<%s> %s\n", remoteAddr, buf[4:n])
 
 		if GlobalObject.WorkerPoolSize > 0 {
 			// 将任务派发给已经存在的goroutine
