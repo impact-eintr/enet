@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -53,14 +54,8 @@ type BFLRouter struct {
 
 func (this *BFLRouter) Handle(request iface.IRequest) {
 	file := string(request.GetData())
-
-	// TODO 将file广播转发出去
-	// <- ch
-	err := request.GetConnection().SendBuffUdpMsg(20, // BFL
-		[]byte(s), request.GetRemoteAddr())
-	if err != nil {
-		fmt.Println(err)
-	}
+	log.Println(file)
+	btest()
 }
 
 func ListenHeartBeat() {
@@ -69,13 +64,37 @@ func ListenHeartBeat() {
 
 	s.AddRouter(10, &LHBRouter{})
 	s.AddRouter(11, &BHBRouter{})
-	s.AddRouter(20, &BHBRouter{})
+	s.AddRouter(20, &BFLRouter{})
 
 	//2 开启服务
 	s.Serve()
 }
 
 var locker sync.RWMutex
+
+func btest() error {
+	conn, err := net.DialUDP("udp", nil,
+		&net.UDPAddr{
+			IP:   net.IPv4(192, 168, 46, 255),
+			Port: 9000,
+		}) // 协议, 发送者,接收者
+	defer conn.Close()
+	if err != nil {
+		return err
+	}
+
+	for {
+		fmt.Print("input: ")
+		var data string
+		fmt.Scan(&data)
+		_, e := conn.Write([]byte(data))
+		if e != nil {
+			fmt.Println(e.Error())
+			continue
+		}
+		fmt.Println("发送成功")
+	}
+}
 
 func main() {
 	go ListenHeartBeat()
