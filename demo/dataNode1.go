@@ -11,7 +11,7 @@ import (
 
 func SendHeartBeat() {
 	localhost := "10.29.1.2:12345"
-	ip := net.ParseIP("127.0.0.1")
+	ip := net.ParseIP("172.17.0.2")
 
 	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
 	dstAddr := &net.UDPAddr{IP: ip, Port: 6430}
@@ -22,7 +22,7 @@ func SendHeartBeat() {
 			fmt.Println(err)
 		}
 
-		msg := enet.NewMsgPackage(10, []byte(localhost))
+		msg := enet.NewMsgPackage(10, []byte(localhost)) // LBH
 		buf := enet.NewDataPack().Encode(msg)
 		_, err = conn.Write(buf[:])
 		if err != nil {
@@ -30,9 +30,31 @@ func SendHeartBeat() {
 		}
 		conn.Close()
 
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 	}
+}
 
+func SendFileLocation(file []byte) {
+	localhost := "10.29.1.2:12345"
+	ip := net.ParseIP("172.17.0.2")
+
+	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
+	dstAddr := &net.UDPAddr{IP: ip, Port: 6430}
+
+	conn, err := net.DialUDP("udp", srcAddr, dstAddr)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer conn.Close()
+
+	file = append(file, '\n')
+	file = append(file, []byte(localhost)...)
+	msg := enet.NewMsgPackage(21, file) // RFL
+	buf := enet.NewDataPack().Encode(msg)
+	_, err = conn.Write(buf[:])
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func main() {
@@ -65,7 +87,7 @@ func main() {
 		}
 		fmt.Printf("来自%v,读到的内容是:%s\n", udpAddr, buffer[:i])
 
-		// 向客户端返回消息
-		conn.WriteToUDP([]byte("hello"), udpAddr)
+		// Node1 有这个文件
+		SendFileLocation(buffer[:i])
 	}
 }

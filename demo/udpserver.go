@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,10 +53,70 @@ type BFLRouter struct {
 	enet.BaseRouter
 }
 
+var bflm = make(map[string]chan []byte)
+var bflLocker sync.RWMutex
+
 func (this *BFLRouter) Handle(request iface.IRequest) {
-	file := string(request.GetData())
-	log.Println(file)
-	btest()
+	btest(request.GetData()) // 发一个定位广播
+
+	bflm[string(request.GetData())] = make(chan []byte)
+
+	select {
+	case res := <-bflm[string(request.GetData())]:
+		// 把定位结果返回
+		request.GetConnection().SendBuffUdpMsg(20,
+			res, request.GetRemoteAddr())
+		delete(bflm, string(request.GetData()))
+	case <-time.Tick(1 * time.Second):
+		// 这里可以倒计时:
+		request.GetConnection().SendBuffUdpMsg(20,
+			[]byte("没有找到"), request.GetRemoteAddr())
+		delete(bflm, string(request.GetData()))
+	}
+
+}
+
+func btest(data []byte) error {
+	conn, err := net.DialUDP("udp", nil,
+		&net.UDPAddr{
+			IP:   net.IPv4(172, 17, 255, 255),
+			Port: 9000,
+		}) // 协议, 发送者,接收者
+	defer conn.Close()
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Write(data)
+	if err != nil {
+		return err
+	}
+	fmt.Println("广播发送成功")
+
+	return nil
+}
+
+// response file location
+type RFLRouter struct {
+	enet.BaseRouter
+}
+
+func (this *RFLRouter) Handle(request iface.IRequest) {
+	rtest(request.GetData())
+}
+
+// RFL 21
+func rtest(data []byte) {
+	s := strings.Split(string(data), "\n")
+	select {
+	case bflm[s[0]] <- []byte(s[1]):
+	case <-time.Tick(1 * time.Second):
+	}
+	//bflLocker.Lock()
+	//if _, ok := bflm[s[0]]; ok {
+	//	bflm[s[0]] <- data
+	//}
+	//bflLocker.Unlock()
 }
 
 func ListenHeartBeat() {
@@ -65,36 +126,13 @@ func ListenHeartBeat() {
 	s.AddRouter(10, &LHBRouter{})
 	s.AddRouter(11, &BHBRouter{})
 	s.AddRouter(20, &BFLRouter{})
+	s.AddRouter(21, &RFLRouter{})
 
 	//2 开启服务
 	s.Serve()
 }
 
 var locker sync.RWMutex
-
-func btest() error {
-	conn, err := net.DialUDP("udp", nil,
-		&net.UDPAddr{
-			IP:   net.IPv4(192, 168, 46, 255),
-			Port: 9000,
-		}) // 协议, 发送者,接收者
-	defer conn.Close()
-	if err != nil {
-		return err
-	}
-
-	for {
-		fmt.Print("input: ")
-		var data string
-		fmt.Scan(&data)
-		_, e := conn.Write([]byte(data))
-		if e != nil {
-			fmt.Println(e.Error())
-			continue
-		}
-		fmt.Println("发送成功")
-	}
-}
 
 func main() {
 	go ListenHeartBeat()

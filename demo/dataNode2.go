@@ -1,36 +1,3 @@
-//package main
-//
-//import (
-//	"fmt"
-//	"net"
-//	"time"
-//
-//	"github.com/impact-eintr/enet"
-//)
-//
-//func main() {
-//	localhost := "10.29.1.3:12345"
-//	ip := net.ParseIP("127.0.0.1")
-//
-//	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
-//	dstAddr := &net.UDPAddr{IP: ip, Port: 6430}
-//	for {
-//		conn, err := net.DialUDP("udp", srcAddr, dstAddr)
-//		if err != nil {
-//			fmt.Println(err)
-//		}
-//
-//		msg := enet.NewMsgPackage(10, []byte(localhost))
-//		buf := enet.NewDataPack().Encode(msg)
-//		_, err = conn.Write(buf[:])
-//		if err != nil {
-//			fmt.Println(err)
-//		}
-//		conn.Close()
-//
-//		time.Sleep(50 * time.Millisecond)
-//	}
-//}
 package main
 
 import (
@@ -44,7 +11,7 @@ import (
 
 func SendHeartBeat() {
 	localhost := "10.29.1.3:12345"
-	ip := net.ParseIP("127.0.0.1")
+	ip := net.ParseIP("172.17.0.2")
 
 	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
 	dstAddr := &net.UDPAddr{IP: ip, Port: 6430}
@@ -63,7 +30,7 @@ func SendHeartBeat() {
 		}
 		conn.Close()
 
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 	}
 
 }
@@ -97,8 +64,5 @@ func main() {
 			continue
 		}
 		fmt.Printf("来自%v,读到的内容是:%s\n", udpAddr, buffer[:i])
-
-		// 向客户端返回消息
-		conn.WriteToUDP([]byte("hello"), udpAddr)
 	}
 }

@@ -2,7 +2,6 @@ package enet
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"strconv"
 	"time"
@@ -26,9 +25,6 @@ func NewMsgHandler() *MsgHandle {
 
 // 马上以非阻塞的方式处理消息
 func (mh *MsgHandle) DoMsgHandler(request iface.IRequest) {
-	if request.GetMsgID() == 10 && string(request.GetData()) == "让我访问!!!" {
-		log.Panic(request.GetMsgID())
-	}
 	handler, ok := mh.Apis[request.GetMsgID()]
 	if !ok {
 		fmt.Println("api msgId = ", request.GetMsgID(), " is not FOUND!")
