@@ -1,6 +1,433 @@
-# Zinx
-Zinx 跟着 zinx写的
-# Zinx TCP服务器框架
+# enet
+enet 跟着 zinx 写的 添加了UDP通信
+
+## 示例
+
+> 下面的示例是一个心跳监听+资源定位的demo
+
+生产者1
+                 \
+	                   <- 广播消息- -发送心跳/资源定位-> udpServer <-定位资源- -检查有多少节点-> 消费者
+                 /
+生产者2
+
+
+### 消息服务器
+``` go
+package main
+
+import (
+	"fmt"
+	"log"
+	"net"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/impact-eintr/enet"
+	"github.com/impact-eintr/enet/iface"
+)
+
+var m = make(map[string]time.Time, 0) // 计数器
+
+// 监听心跳的Router
+type LHBRouter struct {
+	enet.BaseRouter //一定要先基础BaseRouter
+}
+
+// 心跳监控
+func (this *LHBRouter) Handle(request iface.IRequest) {
+	// 先更新
+	locker.Lock()
+	m[string(request.GetData())] = time.Now()
+	locker.Unlock()
+}
+
+// 广播心跳的Router
+type BHBRouter struct {
+	enet.BaseRouter
+}
+
+func (this *BHBRouter) Handle(request iface.IRequest) {
+	// 访问这个Router的都是API server
+	var s string
+	locker.RLock()
+	for k := range m {
+		s += k + " " // A.A.A.A:a B.B.B.B:b
+	}
+	locker.RUnlock()
+
+	err := request.GetConnection().SendBuffUdpMsg(10,
+		[]byte(s), request.GetRemoteAddr())
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+// broadcast file location
+type BFLRouter struct {
+	enet.BaseRouter
+}
+
+var bflm = make(map[string]chan []byte)
+var bflLocker sync.RWMutex
+
+func (this *BFLRouter) Handle(request iface.IRequest) {
+	btest(request.GetData()) // 发一个定位广播
+
+	bflm[string(request.GetData())] = make(chan []byte)
+
+	select {
+	case res := <-bflm[string(request.GetData())]:
+		// 把定位结果返回
+		request.GetConnection().SendBuffUdpMsg(20,
+			res, request.GetRemoteAddr())
+		delete(bflm, string(request.GetData()))
+	case <-time.Tick(1 * time.Second):
+		// 这里可以倒计时:
+		request.GetConnection().SendBuffUdpMsg(20,
+			[]byte("没有找到"), request.GetRemoteAddr())
+		delete(bflm, string(request.GetData()))
+	}
+
+}
+
+func btest(data []byte) error {
+	conn, err := net.DialUDP("udp", nil,
+		&net.UDPAddr{
+			IP:   net.IPv4(172, 17, 255, 255),
+			Port: 9000,
+		}) // 协议, 发送者,接收者
+	defer conn.Close()
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Write(data)
+	if err != nil {
+		return err
+	}
+	fmt.Println("广播发送成功")
+
+	return nil
+}
+
+// response file location
+type RFLRouter struct {
+	enet.BaseRouter
+}
+
+func (this *RFLRouter) Handle(request iface.IRequest) {
+	rtest(request.GetData())
+}
+
+// RFL 21
+func rtest(data []byte) {
+	s := strings.Split(string(data), "\n")
+	select {
+	case bflm[s[0]] <- []byte(s[1]):
+	case <-time.Tick(1 * time.Second):
+	}
+	//bflLocker.Lock()
+	//if _, ok := bflm[s[0]]; ok {
+	//	bflm[s[0]] <- data
+	//}
+	//bflLocker.Unlock()
+}
+
+func ListenHeartBeat() {
+	//1 创建一个server 句柄 s
+	s := enet.NewServer("udp")
+
+	s.AddRouter(10, &LHBRouter{})
+	s.AddRouter(11, &BHBRouter{})
+	s.AddRouter(20, &BFLRouter{})
+	s.AddRouter(21, &RFLRouter{})
+
+	//2 开启服务
+	s.Serve()
+}
+
+var locker sync.RWMutex
+
+func main() {
+	go ListenHeartBeat()
+
+	for {
+		locker.Lock()
+		for k, t := range m {
+			if t.Add(2 * time.Second).Before(time.Now()) {
+				delete(m, k)
+				log.Printf("<%s>失效\n", k)
+			}
+		}
+		locker.Unlock()
+		time.Sleep(2 * time.Second)
+	}
+
+}
+
+```
+
+### 消费端
+
+``` go
+package main
+
+import (
+	"fmt"
+	"net"
+	"time"
+
+	"github.com/impact-eintr/enet"
+)
+
+func listenHeartBeat() {
+	ip := net.ParseIP("172.17.0.2")
+
+	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
+	dstAddr := &net.UDPAddr{IP: ip, Port: 6430}
+
+	conn, err := net.DialUDP("udp", srcAddr, dstAddr)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer conn.Close()
+	for {
+		reqMsg := enet.NewMsgPackage(11, []byte("让我访问!!!"))
+		buf := enet.NewDataPack().Encode(reqMsg)
+		_, err = conn.Write(buf[:])
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		resp := make([]byte, 1024)
+		n, err := conn.Read(resp)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		resp = resp[:n]
+
+		respMsg := enet.NewDataPack().Decode(resp)
+		fmt.Println(string(respMsg.GetData()))
+
+		time.Sleep(2000 * time.Millisecond)
+	}
+
+}
+
+func main() {
+	go listenHeartBeat()
+
+	// 每 3 秒发送一个文件定位信息
+	ip := net.ParseIP("172.17.0.2")
+
+	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
+	dstAddr := &net.UDPAddr{IP: ip, Port: 6430}
+
+	conn, err := net.DialUDP("udp", srcAddr, dstAddr)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer conn.Close()
+
+	for {
+		reqMsg := enet.NewMsgPackage(20, []byte("文件定位测试"))
+		buf := enet.NewDataPack().Encode(reqMsg)
+		_, err = conn.Write(buf[:])
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		resp := make([]byte, 1024)
+		n, err := conn.Read(resp)
+		if err != nil {
+			fmt.Println(err)
+		}
+		resp = resp[:n]
+
+		respMsg := enet.NewDataPack().Decode(resp)
+		fmt.Println("文件位于:", string(respMsg.GetData()))
+
+		time.Sleep(5 * time.Second)
+	}
+}
+
+```
+
+### 生产端1(有资源)
+
+``` go
+package main
+
+import (
+	"fmt"
+	"log"
+	"net"
+	"time"
+
+	"github.com/impact-eintr/enet"
+)
+
+func SendHeartBeat() {
+	localhost := "10.29.1.2:12345"
+	ip := net.ParseIP("172.17.0.2")
+
+	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
+	dstAddr := &net.UDPAddr{IP: ip, Port: 6430}
+
+	for {
+		conn, err := net.DialUDP("udp", srcAddr, dstAddr)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		msg := enet.NewMsgPackage(10, []byte(localhost)) // LBH
+		buf := enet.NewDataPack().Encode(msg)
+		_, err = conn.Write(buf[:])
+		if err != nil {
+			fmt.Println(err)
+		}
+		conn.Close()
+
+		time.Sleep(1000 * time.Millisecond)
+	}
+}
+
+func SendFileLocation(file []byte) {
+	localhost := "10.29.1.2:12345"
+	ip := net.ParseIP("172.17.0.2")
+
+	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
+	dstAddr := &net.UDPAddr{IP: ip, Port: 6430}
+
+	conn, err := net.DialUDP("udp", srcAddr, dstAddr)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer conn.Close()
+
+	file = append(file, '\n')
+	file = append(file, []byte(localhost)...)
+	msg := enet.NewMsgPackage(21, file) // RFL
+	buf := enet.NewDataPack().Encode(msg)
+	_, err = conn.Write(buf[:])
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+func main() {
+	go SendHeartBeat()
+
+	// TODO 准备接受广播 每个dataNode 是一个server
+	// 解析得到UDP地址
+	addr, err := net.ResolveUDPAddr("udp", ":9000")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 在UDP地址上建立UDP监听,得到连接
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer conn.Close()
+
+	// 建立缓冲区
+	buffer := make([]byte, 1024)
+
+	for {
+		//从连接中读取内容,丢入缓冲区
+		i, udpAddr, e := conn.ReadFromUDP(buffer)
+		// 第一个是字节长度,第二个是udp的地址
+		if e != nil {
+			continue
+		}
+		fmt.Printf("来自%v,读到的内容是:%s\n", udpAddr, buffer[:i])
+
+		// Node1 有这个文件
+		SendFileLocation(buffer[:i])
+	}
+}
+
+```
+
+### 生产端2(无资源)
+
+``` go
+package main
+
+import (
+	"fmt"
+	"log"
+	"net"
+	"time"
+
+	"github.com/impact-eintr/enet"
+)
+
+func SendHeartBeat() {
+	localhost := "10.29.1.3:12345"
+	ip := net.ParseIP("172.17.0.2")
+
+	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
+	dstAddr := &net.UDPAddr{IP: ip, Port: 6430}
+
+	for {
+		conn, err := net.DialUDP("udp", srcAddr, dstAddr)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		msg := enet.NewMsgPackage(10, []byte(localhost))
+		buf := enet.NewDataPack().Encode(msg)
+		_, err = conn.Write(buf[:])
+		if err != nil {
+			fmt.Println(err)
+		}
+		conn.Close()
+
+		time.Sleep(1 * time.Second)
+	}
+
+}
+
+func main() {
+	go SendHeartBeat()
+
+	// TODO 准备接受广播 每个dataNode 是一个server
+	// 解析得到UDP地址
+	addr, err := net.ResolveUDPAddr("udp", ":9000")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 在UDP地址上建立UDP监听,得到连接
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer conn.Close()
+
+	// 建立缓冲区
+	buffer := make([]byte, 1024)
+
+	for {
+		//从连接中读取内容,丢入缓冲区
+		i, udpAddr, e := conn.ReadFromUDP(buffer)
+		// 第一个是字节长度,第二个是udp的地址
+		if e != nil {
+			continue
+		}
+		fmt.Printf("来自%v,读到的内容是:%s\n", udpAddr, buffer[:i])
+	}
+}
+
+```
 
 ## v0.2
 ### 简单的连接封装和业务绑定
@@ -60,7 +487,7 @@ Zinx 跟着 zinx写的
     - 方法
         - Setter
         - Getter
-- 将消息封装机制集成到Zinx框架中    
+- 将消息封装机制集成到Zinx框架中
     - 将Message添加到Request中
     - 修改连接读取数据的机制 将之前的单纯读取byte改为拆包读取方式
     - 连接的发包机制 将发送的消息进行打包 再发送
