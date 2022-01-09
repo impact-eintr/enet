@@ -80,11 +80,16 @@ func (c *Connection) StartTcpReader() {
 		// 读取客户端的Msg Header
 		headData := make([]byte, dp.GetHeadLen())
 		if _, err := io.ReadFull(c.GetTcpConnection(), headData); err != nil {
-			fmt.Println("read msg head error ", err)
-			c.ExitBuffChan <- true
-			continue
+			if err == io.EOF {
+				fmt.Println("read msg head error ", err)
+				c.ExitBuffChan <- true
+				return
+			} else {
+				fmt.Println("read msg head error ", err)
+				c.ExitBuffChan <- true
+				continue
+			}
 		}
-
 		// 拆包，得到msgid 和 datalen 放在msg中
 		msg, err := dp.Unpack(headData)
 		if err != nil {
@@ -98,9 +103,15 @@ func (c *Connection) StartTcpReader() {
 		if msg.GetDataLen() > 0 {
 			data = make([]byte, msg.GetDataLen())
 			if _, err := io.ReadFull(c.GetTcpConnection(), data); err != nil {
-				fmt.Println("read msg data error ", err)
-				c.ExitBuffChan <- true
-				continue
+				if err == io.EOF {
+					fmt.Println("read msg head error ", err)
+					c.ExitBuffChan <- true
+					return
+				} else {
+					fmt.Println("read msg head error ", err)
+					c.ExitBuffChan <- true
+					continue
+				}
 			}
 		}
 		msg.SetData(data)
