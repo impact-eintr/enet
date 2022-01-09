@@ -129,7 +129,6 @@ func (c *Connection) StartTcpReader() {
 func (c *Connection) StartTcpWriter() {
 	fmt.Println("[Writer Goroutine is running]")
 	defer fmt.Println(c.RemoteAddr().String(), "[conn Writer exit!]")
-	defer c.Stop()
 
 	for {
 		select {
@@ -251,7 +250,6 @@ func (c *Connection) StartUdpReader() {
 
 func (c *Connection) StartUdpWriter() {
 	fmt.Println("[Writer Goroutine is running]")
-	defer c.Stop()
 
 	for {
 		select {
