@@ -23,7 +23,7 @@ func SendHeartBeat() {
 		}
 
 		msg := enet.NewMsgPackage(10, []byte(localhost)) // LBH
-		buf := enet.NewDataPack().Encode(msg)
+		buf := enet.GetDataPack().Encode(msg)
 		_, err = conn.Write(buf[:])
 		if err != nil {
 			fmt.Println(err)
@@ -50,7 +50,7 @@ func SendFileLocation(file []byte) {
 	file = append(file, '\n')
 	file = append(file, []byte(localhost)...)
 	msg := enet.NewMsgPackage(21, file) // RFL
-	buf := enet.NewDataPack().Encode(msg)
+	buf := enet.GetDataPack().Encode(msg)
 	_, err = conn.Write(buf[:])
 	if err != nil {
 		fmt.Println(err)

@@ -21,7 +21,7 @@ func listenHeartBeat() {
 	defer conn.Close()
 	for {
 		reqMsg := enet.NewMsgPackage(11, []byte("让我访问!!!"))
-		buf := enet.NewDataPack().Encode(reqMsg)
+		buf := enet.GetDataPack().Encode(reqMsg)
 		_, err = conn.Write(buf[:])
 		if err != nil {
 			fmt.Println(err)
@@ -35,7 +35,7 @@ func listenHeartBeat() {
 		}
 		resp = resp[:n]
 
-		respMsg := enet.NewDataPack().Decode(resp)
+		respMsg := enet.GetDataPack().Decode(resp)
 		fmt.Println(string(respMsg.GetData()))
 
 		time.Sleep(2000 * time.Millisecond)
@@ -60,7 +60,7 @@ func main() {
 
 	for {
 		reqMsg := enet.NewMsgPackage(20, []byte("文件定位测试"))
-		buf := enet.NewDataPack().Encode(reqMsg)
+		buf := enet.GetDataPack().Encode(reqMsg)
 		_, err = conn.Write(buf[:])
 		if err != nil {
 			fmt.Println(err)
@@ -74,7 +74,7 @@ func main() {
 		}
 		resp = resp[:n]
 
-		respMsg := enet.NewDataPack().Decode(resp)
+		respMsg := enet.GetDataPack().Decode(resp)
 		fmt.Println("文件位于:", string(respMsg.GetData()))
 
 		time.Sleep(5 * time.Second)

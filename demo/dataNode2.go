@@ -23,7 +23,7 @@ func SendHeartBeat() {
 		}
 
 		msg := enet.NewMsgPackage(10, []byte(localhost))
-		buf := enet.NewDataPack().Encode(msg)
+		buf := enet.GetDataPack().Encode(msg)
 		_, err = conn.Write(buf[:])
 		if err != nil {
 			fmt.Println(err)

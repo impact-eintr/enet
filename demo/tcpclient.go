@@ -22,7 +22,7 @@ func main() {
 
 	for {
 		//发封包message消息
-		dp := enet.NewDataPack()
+		dp := enet.GetDataPack()
 		msg, _ := dp.Pack(enet.NewMsgPackage(1, []byte("enet V1.0 Client Test Message")))
 		_, err := conn.Write(msg)
 		if err != nil {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"sync"
 
 	"github.com/impact-eintr/enet/iface"
 )
@@ -11,9 +12,15 @@ import (
 // 封包拆包类实例，暂时不需要成员
 type DataPack struct{}
 
+var instance *DataPack
+var once sync.Once
+
 // 获取封包拆包实例
-func NewDataPack() *DataPack {
-	return &DataPack{}
+func GetDataPack() *DataPack {
+	once.Do(func() {
+		instance = &DataPack{}
+	})
+	return instance
 }
 
 // 获取包头长度
