@@ -75,7 +75,7 @@ func (c *Connection) StartTcpReader() {
 
 	for {
 		// 创建包装器
-		dp := NewDataPack()
+		dp := GetDataPack()
 
 		// 读取客户端的Msg Header
 		headData := make([]byte, dp.GetHeadLen())
@@ -176,7 +176,7 @@ func (c *Connection) SendTcpMsg(msgId uint32, data []byte) error {
 		return errors.New("Connection closed when send msg")
 	}
 	// 将data封包，并且发送
-	dp := NewDataPack()
+	dp := GetDataPack()
 	msg, err := dp.Pack(NewMsgPackage(msgId, data))
 	if err != nil {
 		fmt.Println("Pack error msg id = ", msgId)
@@ -198,7 +198,7 @@ func (c *Connection) SendBuffTcpMsg(msgId uint32, data []byte) error {
 		return errors.New("Connection closed when send buff msg")
 	}
 	//将data封包，并且发送
-	dp := NewDataPack()
+	dp := GetDataPack()
 	msg, err := dp.Pack(NewMsgPackage(msgId, data))
 	if err != nil {
 		fmt.Println("Pack error msg id = ", msgId)
@@ -241,7 +241,7 @@ func (c *Connection) StartUdpReader() {
 		}
 
 		// 解码 构建消息
-		dp := NewDataPack()
+		dp := GetDataPack()
 		msg := dp.Decode(buf[:n])
 
 		// 得到当前客户端请求的Request数据
@@ -299,7 +299,7 @@ func (c *Connection) SendUdpMsg(msgId uint32, data []byte, dst *net.UDPAddr) err
 
 	// 编码 构建数据包
 	pkg := NewMsgPackage(msgId, data)
-	dp := NewDataPack()
+	dp := GetDataPack()
 	msg := dp.Encode(pkg)
 
 	// 写回客户端
@@ -318,7 +318,7 @@ func (c *Connection) SendBuffUdpMsg(msgId uint32, data []byte, dst *net.UDPAddr)
 
 	// 编码 构建数据包
 	pkg := NewMsgPackage(msgId, data)
-	dp := NewDataPack()
+	dp := GetDataPack()
 	msg := dp.Encode(pkg)
 
 	// 写回客户端
