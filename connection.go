@@ -84,7 +84,9 @@ func (c *Connection) StartTcpReader() {
 		headData := make([]byte, dp.GetHeadLen())
 		if _, err := io.ReadFull(c.GetTcpConnection(), headData); err != nil {
 			if err == io.EOF {
-				fmt.Println("read msg head error ", err)
+				if _, ok := os.LookupEnv("enet_debug"); ok {
+					fmt.Println("read msg head error ", err)
+				}
 				c.ExitBuffChan <- true
 				return
 			} else {
@@ -107,7 +109,9 @@ func (c *Connection) StartTcpReader() {
 			data = make([]byte, msg.GetDataLen())
 			if _, err := io.ReadFull(c.GetTcpConnection(), data); err != nil {
 				if err == io.EOF {
-					fmt.Println("read msg head error ", err)
+					if _, ok := os.LookupEnv("enet_debug"); ok {
+						fmt.Println("read msg head error ", err)
+					}
 					c.ExitBuffChan <- true
 					return
 				} else {
