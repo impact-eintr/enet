@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
 
 	"github.com/impact-eintr/enet/iface"
@@ -69,8 +70,10 @@ func NewTcpConntion(server iface.IServer, conn *net.TCPConn, connID uint32, msgH
 
 /* 处理tcp conn读数据的Goroutine */
 func (c *Connection) StartTcpReader() {
-	fmt.Println("[Reader Goroutine is running]")
-	defer fmt.Printf("[%s Reader Goroutine Exit!]\n", c.RemoteAddr().String())
+	if _, ok := os.LookupEnv("enet_debug"); ok {
+		fmt.Println("[Reader Goroutine is running]")
+		defer fmt.Printf("[%s Reader Goroutine Exit!]\n", c.RemoteAddr().String())
+	}
 	defer c.Stop()
 
 	for {
@@ -138,8 +141,10 @@ func (c *Connection) StartTcpReader() {
 	写消息Goroutine， 用户将数据发送给客户端
 */
 func (c *Connection) StartTcpWriter() {
-	fmt.Println("[Writer Goroutine is running]")
-	defer fmt.Println("[Writer Goroutine Exit!]")
+	if _, ok := os.LookupEnv("enet_debug"); ok {
+		fmt.Println("[Writer Goroutine is running]")
+		defer fmt.Println("[Writer Goroutine Exit!]")
+	}
 
 	for {
 		select {
@@ -229,7 +234,11 @@ func NewUdpConntion(s iface.IServer, conn *net.UDPConn, connID uint32, msgHandle
 
 /* 处理udp conn读数据的Goroutine */
 func (c *Connection) StartUdpReader() {
-	fmt.Println("Reader Goroutine is running")
+	if _, ok := os.LookupEnv("enet_debug"); ok {
+		fmt.Println("[Reader Goroutine is running]")
+		defer fmt.Printf("[%s Reader Goroutine Exit!]\n", c.RemoteAddr().String())
+	}
+
 	defer c.Stop()
 
 	for {
@@ -264,7 +273,10 @@ func (c *Connection) StartUdpReader() {
 }
 
 func (c *Connection) StartUdpWriter() {
-	fmt.Println("[Writer Goroutine is running]")
+	if _, ok := os.LookupEnv("enet_debug"); ok {
+		fmt.Println("[Writer Goroutine is running]")
+		defer fmt.Println("[Writer Goroutine Exit!]")
+	}
 
 	for {
 		select {
