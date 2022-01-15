@@ -3,6 +3,7 @@ package enet
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"strconv"
 	"time"
 
@@ -45,12 +46,16 @@ func (mh *MsgHandle) AddRouter(msgId uint32, router iface.IRouter) {
 	}
 	// 2 添加msg与api的绑定关系
 	mh.Apis[msgId] = router
-	fmt.Println("Add api msgId = ", msgId)
+	if _, ok := os.LookupEnv("enet_debug"); ok {
+		fmt.Println("Add api msgId = ", msgId)
+	}
 }
 
 //启动一个Worker工作流程
 func (mh *MsgHandle) StartOneWorker(workerID int, taskQueue chan iface.IRequest) {
-	fmt.Println("Worker ID = ", workerID, " is started.")
+	if _, ok := os.LookupEnv("enet_debug"); ok {
+		fmt.Println("Worker ID = ", workerID, " is started.")
+	}
 	// 不断的等待队列中的消息
 	for {
 		select {
@@ -81,8 +86,10 @@ func (mh *MsgHandle) SendMsgToTaskQueue(request iface.IRequest) {
 	// 得到需要处理此条连接的workerID
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	workerID := r.Intn(int(mh.WorkerPoolSize))
-	fmt.Println("Add ConnID=", request.GetConnection().GetConnID(),
-		" request msgID=", request.GetMsgID(), "to workerID=", workerID)
+	if _, ok := os.LookupEnv("enet_debug"); ok {
+		fmt.Println("Add ConnID=", request.GetConnection().GetConnID(),
+			" request msgID=", request.GetMsgID(), "to workerID=", workerID)
+	}
 	// 将请求消息发送给任务队列
 	mh.TaskQueue[workerID] <- request
 }

@@ -3,6 +3,7 @@ package enet
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/impact-eintr/enet/iface"
@@ -34,7 +35,9 @@ func (connMgr *ConnManager) Add(conn iface.IConnection) {
 	//将conn连接添加到ConnMananger中
 	connMgr.connections[conn.GetConnID()] = conn
 
-	fmt.Println("connection add to ConnManager successfully: conn num = ", connMgr.Len())
+	if _, ok := os.LookupEnv("enet_debug"); ok {
+		fmt.Println("connection add to ConnManager successfully: conn num = ", connMgr.Len())
+	}
 }
 
 //删除连接
@@ -46,7 +49,9 @@ func (connMgr *ConnManager) Remove(conn iface.IConnection) {
 	//删除连接信息
 	delete(connMgr.connections, conn.GetConnID())
 
-	fmt.Println("connection Remove ConnID=", conn.GetConnID(), " successfully: conn num = ", connMgr.Len())
+	if _, ok := os.LookupEnv("enet_debug"); ok {
+		fmt.Println("connection Remove ConnID=", conn.GetConnID(), " successfully: conn num = ", connMgr.Len())
+	}
 }
 
 //利用ConnID获取链接
@@ -81,5 +86,7 @@ func (connMgr *ConnManager) ClearConn() {
 		delete(connMgr.connections, connID)
 	}
 
-	fmt.Println("Clear All Connections successfully: conn num = ", connMgr.Len())
+	if _, ok := os.LookupEnv("enet_debug"); ok {
+		fmt.Println("Clear All Connections successfully: conn num = ", connMgr.Len())
+	}
 }

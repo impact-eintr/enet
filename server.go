@@ -3,6 +3,7 @@ package enet
 import (
 	"fmt"
 	"net"
+	"os"
 	"runtime"
 	"strings"
 
@@ -49,6 +50,8 @@ func (s *Server) Start() {
 		GlobalObject.Version,
 		GlobalObject.MaxConn,
 		GlobalObject.MaxPacketSize)
+	fmt.Println("[NOTICE] If you need to enable debugging,please set the environment variable through `export enet_debug`")
+
 	go func() {
 		//0 启动worker工作池机制
 		s.msgHandler.StartWorkerPool()
@@ -64,8 +67,9 @@ func (s *Server) Start() {
 			}
 
 			//已经监听成功
-			fmt.Println("start enet server  ", s.Name, " succ, now listenning...")
-
+			if _, ok := os.LookupEnv("enet_debug"); ok {
+				fmt.Println("start enet server  ", s.Name, " succ, now listenning...")
+			}
 			//TODO server.go 应该有一个自动生成ID的方法
 			var cid uint32
 			cid = 0
@@ -127,8 +131,6 @@ func (s *Server) Stop() {
 
 func (s *Server) Serve() {
 	s.Start()
-
-	//TODO Server.Serve() 是否在启动服务的时候 还要处理其他的事情呢 可以在这里添加
 
 	//阻塞,否则main goroutine退出， listenner的goroutine将会退出
 	for {
