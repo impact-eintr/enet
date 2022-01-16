@@ -1,6 +1,7 @@
 package enet
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -29,7 +30,8 @@ type Connection struct {
 	MsgHandler iface.IMsgHandle
 
 	// 告知该链接已经退出/停止的channel
-	ExitBuffChan chan bool
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	//无缓冲管道，用于读、写两个goroutine之间的消息通信
 	msgChan chan *connMsg
@@ -37,6 +39,7 @@ type Connection struct {
 	//有缓冲管道，用于读、写两个goroutine之间的消息通信
 	msgBuffChan chan *connMsg
 
+	sync.RWMutex
 	//链接属性
 	property map[string]interface{}
 	//保护链接属性修改的锁
@@ -53,15 +56,14 @@ type connMsg struct {
 // 创建Tcp连接的方法
 func NewTcpConntion(server iface.IServer, conn *net.TCPConn, connID uint32, msgHandler iface.IMsgHandle) *Connection {
 	c := &Connection{
-		Server:       server,
-		Conn:         conn,
-		ConnID:       connID,
-		isClosed:     false,
-		MsgHandler:   msgHandler,
-		ExitBuffChan: make(chan bool, 1),
-		msgChan:      make(chan *connMsg), //msgChan初始化
-		msgBuffChan:  make(chan *connMsg, GlobalObject.MaxMsgChanLen),
-		property:     make(map[string]interface{}), //对链接属性map初始化
+		Server:      server,
+		Conn:        conn,
+		ConnID:      connID,
+		isClosed:    false,
+		MsgHandler:  msgHandler,
+		msgChan:     make(chan *connMsg), //msgChan初始化
+		msgBuffChan: make(chan *connMsg, GlobalObject.MaxMsgChanLen),
+		property:    make(map[string]interface{}), //对链接属性map初始化
 	}
 
 	c.Server.GetConnMgr().Add(c) //将当前新创建的连接添加到ConnManager中
@@ -74,69 +76,67 @@ func (c *Connection) StartTcpReader() {
 		fmt.Println("[Reader Goroutine is running]")
 		defer fmt.Printf("[%s Reader Goroutine Exit!]\n", c.RemoteAddr().String())
 	}
-	defer c.Stop()
+	defer c.Stop(true)
 
+	// 获取包装器
+	dp := GetDataPack()
 	for {
-		// 创建包装器
-		dp := GetDataPack()
-
-		// 读取客户端的Msg Header
-		headData := make([]byte, dp.GetHeadLen())
-		if _, err := io.ReadFull(c.GetTcpConnection(), headData); err != nil {
-			if err == io.EOF {
-				if _, ok := os.LookupEnv("enet_debug"); ok {
-					fmt.Println("read msg head error ", err)
-				}
-				c.ExitBuffChan <- true
-				return
-			} else {
-				fmt.Println("read msg head error ", err)
-				c.ExitBuffChan <- true
-				continue
-			}
-		}
-		// 拆包，得到msgid 和 datalen 放在msg中
-		msg, err := dp.Unpack(headData)
-		if err != nil {
-			fmt.Println("unpack error ", err)
-			c.ExitBuffChan <- true
-			continue
-		}
-
-		// 根据 dataLen 读取 data，放在msg.Data中
-		var data []byte
-		if msg.GetDataLen() > 0 {
-			data = make([]byte, msg.GetDataLen())
-			if _, err := io.ReadFull(c.GetTcpConnection(), data); err != nil {
+		select {
+		case <-c.ctx.Done():
+			return
+		default:
+			// 读取客户端的Msg Header
+			headData := make([]byte, dp.GetHeadLen())
+			if _, err := io.ReadFull(c.GetTcpConnection(), headData); err != nil {
 				if err == io.EOF {
 					if _, ok := os.LookupEnv("enet_debug"); ok {
 						fmt.Println("read msg head error ", err)
 					}
-					c.ExitBuffChan <- true
 					return
 				} else {
 					fmt.Println("read msg head error ", err)
-					c.ExitBuffChan <- true
-					continue
+					return
 				}
 			}
-		}
-		msg.SetData(data)
+			// 拆包，得到msgid 和 datalen 放在msg中
+			msg, err := dp.Unpack(headData)
+			if err != nil {
+				fmt.Println("unpack error ", err)
+				return
+			}
+			// 根据 dataLen 读取 data，放在msg.Data中
+			var data []byte
+			if msg.GetDataLen() > 0 {
+				data = make([]byte, msg.GetDataLen())
+				if _, err := io.ReadFull(c.GetTcpConnection(), data); err != nil {
+					if err == io.EOF {
+						if _, ok := os.LookupEnv("enet_debug"); ok {
+							fmt.Println("read msg head error ", err)
+						}
+						return
+					} else {
+						fmt.Println("read msg head error ", err)
+						continue
+					}
+				}
+			}
+			msg.SetData(data)
 
-		// 得到当前客户端请求的Request数据
-		req := Request{
-			conn: c,
-			msg:  msg,
-		}
+			// 得到当前客户端请求的Request数据
+			req := Request{
+				conn: c,
+				msg:  msg,
+			}
 
-		if GlobalObject.WorkerPoolSize > 0 {
-			// 将任务派发给已经存在的goroutine
-			// 已经启动工作池机制，将消息交给Worker处理
-			c.MsgHandler.SendMsgToTaskQueue(&req)
-		} else {
-			// 开启新的gouroutine 来处理这些消息
-			// 从绑定好的消息和对应的处理方法中执行对应的Handle方法
-			go c.MsgHandler.DoMsgHandler(&req)
+			if GlobalObject.WorkerPoolSize > 0 {
+				// 将任务派发给已经存在的goroutine
+				// 已经启动工作池机制，将消息交给Worker处理
+				c.MsgHandler.SendMsgToTaskQueue(&req)
+			} else {
+				// 开启新的gouroutine 来处理这些消息
+				// 从绑定好的消息和对应的处理方法中执行对应的Handle方法
+				go c.MsgHandler.DoMsgHandler(&req)
+			}
 		}
 	}
 }
@@ -166,10 +166,10 @@ func (c *Connection) StartTcpWriter() {
 					return
 				}
 			} else {
+				// msgBufChan 已经关闭
 				break
 			}
-		case <-c.ExitBuffChan:
-			//conn已经关闭
+		case <-c.ctx.Done():
 			return
 		}
 	}
@@ -225,13 +225,12 @@ func (c *Connection) SendBuffTcpMsg(msgId uint32, data []byte) error {
 //创建Udp连接的方法
 func NewUdpConntion(s iface.IServer, conn *net.UDPConn, connID uint32, msgHandler iface.IMsgHandle) *Connection {
 	c := &Connection{
-		Server:       s,
-		Conn:         conn,
-		ConnID:       connID,
-		isClosed:     false,
-		MsgHandler:   msgHandler,
-		ExitBuffChan: make(chan bool, 1),
-		msgChan:      make(chan *connMsg), //msgChan初始化
+		Server:     s,
+		Conn:       conn,
+		ConnID:     connID,
+		isClosed:   false,
+		MsgHandler: msgHandler,
+		msgChan:    make(chan *connMsg), //msgChan初始化
 	}
 	return c
 }
@@ -243,35 +242,40 @@ func (c *Connection) StartUdpReader() {
 		defer fmt.Printf("[%s Reader Goroutine Exit!]\n", c.RemoteAddr().String())
 	}
 
-	defer c.Stop()
+	defer c.Stop(true)
 
 	for {
-		buf := make([]byte, GlobalObject.MaxPacketSize)
-		n, remoteAddr, err := c.Conn.(*net.UDPConn).ReadFromUDP(buf)
-		if err != nil {
-			fmt.Printf("error during read: %s", err)
-			c.ExitBuffChan <- true
-		}
+		select {
+		case <-c.ctx.Done():
+			return
+		default:
+			buf := make([]byte, GlobalObject.MaxPacketSize)
+			n, remoteAddr, err := c.Conn.(*net.UDPConn).ReadFromUDP(buf)
+			if err != nil {
+				fmt.Printf("error during read: %s", err)
+				return
+			}
 
-		// 解码 构建消息
-		dp := GetDataPack()
-		msg := dp.Decode(buf[:n])
+			// 解码 构建消息
+			dp := GetDataPack()
+			msg := dp.Decode(buf[:n])
 
-		// 得到当前客户端请求的Request数据
-		req := Request{
-			conn:       c,
-			msg:        msg,
-			remoteAddr: remoteAddr,
-		}
+			// 得到当前客户端请求的Request数据
+			req := Request{
+				conn:       c,
+				msg:        msg,
+				remoteAddr: remoteAddr,
+			}
 
-		if GlobalObject.WorkerPoolSize > 0 {
-			// 将任务派发给已经存在的goroutine
-			// 已经启动工作池机制，将消息交给Worker处理
-			c.MsgHandler.SendMsgToTaskQueue(&req)
-		} else {
-			// 开启新的gouroutine 来处理这些消息
-			// 从绑定好的消息和对应的处理方法中执行对应的Handle方法
-			go c.MsgHandler.DoMsgHandler(&req)
+			if GlobalObject.WorkerPoolSize > 0 {
+				// 将任务派发给已经存在的goroutine
+				// 已经启动工作池机制，将消息交给Worker处理
+				c.MsgHandler.SendMsgToTaskQueue(&req)
+			} else {
+				// 开启新的gouroutine 来处理这些消息
+				// 从绑定好的消息和对应的处理方法中执行对应的Handle方法
+				go c.MsgHandler.DoMsgHandler(&req)
+			}
 		}
 	}
 }
@@ -296,7 +300,7 @@ func (c *Connection) StartUdpWriter() {
 			if err != nil {
 				fmt.Printf(err.Error())
 			}
-		case <-c.ExitBuffChan:
+		case <-c.ctx.Done():
 			//conn已经关闭
 			return
 		}
@@ -344,6 +348,7 @@ func (c *Connection) SendBuffUdpMsg(msgId uint32, data []byte, dst *net.UDPAddr)
 
 // 启动连接
 func (c *Connection) Start() {
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 	// 开启处理该连接
 	if _, ok := c.Conn.(*net.TCPConn); ok {
 		go c.StartTcpReader()
@@ -357,26 +362,21 @@ func (c *Connection) Start() {
 
 	//按照用户传递进来的创建连接时需要处理的业务，执行钩子方法
 	c.Server.CallOnConnStart(c)
-
-	for {
-		select {
-		case <-c.ExitBuffChan:
-			// 得到消息退出
-			return
-		}
-	}
 }
 
 // 停止连接
-func (c *Connection) Stop() {
-	//1. 如果当前链接已经关闭
+func (c *Connection) Stop(remove bool) {
+	c.Lock()
+	defer c.Unlock()
+
+	// 如果用户注册了该链接的关闭回调业务，那么在此刻应该显示调用
+	c.Server.CallOnConnStop(c)
+
+	// 如果当前链接已经关闭
 	if c.isClosed == true {
 		return
 	}
 	c.isClosed = true
-
-	//如果用户注册了该链接的关闭回调业务，那么在此刻应该显示调用
-	c.Server.CallOnConnStop(c)
 
 	// 关闭socket链接
 	if _, ok := c.Conn.(*net.TCPConn); ok {
@@ -385,14 +385,15 @@ func (c *Connection) Stop() {
 		c.Conn.Close()
 	}
 
-	//通知从缓冲队列读数据的业务，该链接已经关闭
-	c.ExitBuffChan <- true
+	// 通知 Reader / Writer，该链接已经关闭
+	c.cancel()
 
-	//将链接从连接管理器中删除
-	c.Server.GetConnMgr().Remove(c) //删除conn从ConnManager中
+	// 将链接从连接管理器中删除
+	if remove {
+		c.Server.GetConnMgr().Remove(c)
+	}
 
-	//关闭该链接全部管道
-	close(c.ExitBuffChan)
+	// 关闭该链接全部管道
 	close(c.msgBuffChan)
 }
 

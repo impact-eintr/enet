@@ -6,7 +6,7 @@ type IConnection interface {
 	// 启动连接
 	Start()
 	// 停止连接
-	Stop()
+	Stop(bool) // 这个bool用来判断是否要让conn自己取消管理
 	// 从当前连接中获取原始的tcp socket
 	GetTcpConnection() *net.TCPConn
 	// 从当前连接中获取原始的udp socket

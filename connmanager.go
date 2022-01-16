@@ -81,7 +81,7 @@ func (connMgr *ConnManager) ClearConn() {
 	//停止并删除全部的连接信息
 	for connID, conn := range connMgr.connections {
 		//停止
-		conn.Stop()
+		conn.Stop(false)
 		//删除
 		delete(connMgr.connections, connID)
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/impact-eintr/enet"
 	"github.com/impact-eintr/enet/iface"
@@ -81,5 +82,7 @@ func main() {
 	s.AddRouter(1, &HelloRouter{})
 
 	//2 开启服务
-	s.Serve()
+	s.Start()
+	time.Sleep(5 * time.Second)
+	s.Stop()
 }
