@@ -181,6 +181,8 @@ func (c *Connection) SendTcpMsg(msgId uint32, data []byte) error {
 		return errors.New("Invalid Connection type: UDP, should be: TCP")
 	}
 
+	c.Lock()
+	defer c.Unlock()
 	if c.isClosed == true {
 		return errors.New("Connection closed when send msg")
 	}
