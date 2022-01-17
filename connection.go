@@ -203,9 +203,12 @@ func (c *Connection) SendBuffTcpMsg(msgId uint32, data []byte) error {
 		return errors.New("Invalid Connection type: UDP, should be: TCP")
 	}
 
+	c.Lock()
+	defer c.Unlock()
 	if c.isClosed == true {
 		return errors.New("Connection closed when send buff msg")
 	}
+
 	//将data封包，并且发送
 	dp := GetDataPack()
 	msg, err := dp.Pack(NewMsgPackage(msgId, data))

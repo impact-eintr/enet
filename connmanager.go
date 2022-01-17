@@ -69,6 +69,9 @@ func (connMgr *ConnManager) Get(connID uint32) (iface.IConnection, error) {
 
 //获取当前连接
 func (connMgr *ConnManager) Len() int {
+	//保护共享资源Map 加读锁
+	connMgr.connLock.RLock()
+	defer connMgr.connLock.RUnlock()
 	return len(connMgr.connections)
 }
 

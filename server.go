@@ -22,8 +22,7 @@ type Server struct {
 	// 当前Server的消息管理模块，用来绑定MsgId和对应的处理方法
 	msgHandler iface.IMsgHandle
 	// 当前Server的链接管理器
-	ConnMgr  iface.IConnManager
-	Listener *net.TCPListener
+	ConnMgr iface.IConnManager
 	// =======================
 	//新增两个hook函数原型
 
@@ -61,24 +60,24 @@ func (s *Server) Start() {
 		if s.IPVersion[0] == 't' {
 			// ========================= TCP业务 ==========================
 			var err error
-			s.Listener, err = net.ListenTCP(s.IPVersion,
+			listener, err := net.ListenTCP(s.IPVersion,
 				&net.TCPAddr{IP: net.ParseIP(s.IP), Port: s.Port})
 			if err != nil {
 				fmt.Println("listen", s.IPVersion, "err", err)
 				return
 			}
 
-			//已经监听成功
+			// 已经监听成功
 			if _, ok := os.LookupEnv("enet_debug"); ok {
 				fmt.Println("start enet server  ", s.Name, " succ, now listenning...")
 			}
-			//TODO server.go 应该有一个自动生成ID的方法
+			// TODO server.go 应该有一个自动生成ID的方法
 			var cid uint32
 			cid = 0
 
 			// 启动server网络连接业务
 			for {
-				conn, err := s.Listener.AcceptTCP()
+				conn, err := listener.AcceptTCP()
 				if err != nil {
 					if nerr, ok := err.(net.Error); ok && nerr.Temporary() {
 						fmt.Printf("temporary Accept() failure - %s", err)
@@ -129,7 +128,6 @@ func (s *Server) Stop() {
 
 	// 将其他需要清理的连接信息或者其他信息 也要一并停止或者清理
 	s.ConnMgr.ClearConn()
-	s.Listener.Close()
 }
 
 func (s *Server) Serve() {
