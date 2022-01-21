@@ -87,16 +87,16 @@ func (c *Connection) StartTcpReader() {
 		default:
 			// 读取客户端的Msg Header
 			headData := make([]byte, dp.GetHeadLen())
-			if _, err := io.ReadFull(c.GetTcpConnection(), headData); err != nil {
-				if err == io.EOF {
-					if _, ok := os.LookupEnv("enet_debug"); ok {
-						fmt.Println("read msg head error ", err)
-					}
-					return
-				} else {
+			switch _, err := io.ReadFull(c.GetTcpConnection(), headData); err {
+			case io.EOF:
+				if _, ok := os.LookupEnv("enet_debug"); ok {
 					fmt.Println("read msg head error ", err)
-					return
 				}
+				return
+			case nil:
+			default:
+				fmt.Println("read msg head error ", err)
+				return
 			}
 			// 拆包，得到msgid 和 datalen 放在msg中
 			msg, err := dp.Unpack(headData)
@@ -108,18 +108,19 @@ func (c *Connection) StartTcpReader() {
 			var data []byte
 			if msg.GetDataLen() > 0 {
 				data = make([]byte, msg.GetDataLen())
-				if _, err := io.ReadFull(c.GetTcpConnection(), data); err != nil {
-					if err == io.EOF {
-						if _, ok := os.LookupEnv("enet_debug"); ok {
-							fmt.Println("read msg head error ", err)
-						}
-						return
-					} else {
+				switch _, err := io.ReadFull(c.GetTcpConnection(), data); err {
+				case io.EOF:
+					if _, ok := os.LookupEnv("enet_debug"); ok {
 						fmt.Println("read msg head error ", err)
-						continue
 					}
+					return
+				case nil:
+				default:
+					fmt.Println("read msg head error ", err)
+					return
 				}
 			}
+
 			msg.SetData(data)
 
 			// 得到当前客户端请求的Request数据
