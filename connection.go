@@ -90,7 +90,7 @@ func (c *Connection) StartTcpReader() {
 			switch _, err := io.ReadFull(c.GetTcpConnection(), headData); err {
 			case io.EOF:
 				if _, ok := os.LookupEnv("enet_debug"); ok {
-					fmt.Println("read msg head error ", err)
+					fmt.Println("读取结束")
 				}
 				return
 			case nil:
@@ -111,7 +111,7 @@ func (c *Connection) StartTcpReader() {
 				switch _, err := io.ReadFull(c.GetTcpConnection(), data); err {
 				case io.EOF:
 					if _, ok := os.LookupEnv("enet_debug"); ok {
-						fmt.Println("read msg head error ", err)
+						fmt.Println("读取结束")
 					}
 					return
 				case nil:
