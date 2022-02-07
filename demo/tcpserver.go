@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/impact-eintr/enet"
+	"github.com/impact-eintr/enet/v2"
 )
 
 //ping test 自定义路由

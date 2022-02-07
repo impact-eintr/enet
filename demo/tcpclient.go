@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/impact-eintr/enet"
+	"github.com/impact-eintr/enet/v2"
 )
 
 func main() {
