@@ -1,4 +1,4 @@
-package iface
+package enet
 
 /*
 	将请求的一个消息封装到message中，定义抽象层接口

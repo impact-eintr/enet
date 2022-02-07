@@ -1,4 +1,4 @@
-package iface
+package enet
 
 /*
 	封包数据和拆包数据

@@ -2,18 +2,16 @@ package enet
 
 import (
 	"net"
-
-	"github.com/impact-eintr/enet/iface"
 )
 
 type Request struct {
-	conn       iface.IConnection //已经和客户端建立好的 链接
-	msg        iface.IMessage    //客户端请求的数据
-	remoteAddr *net.UDPAddr      // udp通信时 远端地址
+	conn       IConnection  //已经和客户端建立好的 链接
+	msg        IMessage     //客户端请求的数据
+	remoteAddr *net.UDPAddr // udp通信时 远端地址
 }
 
 //获取请求连接信息
-func (r *Request) GetConnection() iface.IConnection {
+func (r *Request) GetConnection() IConnection {
 	return r.conn
 }
 

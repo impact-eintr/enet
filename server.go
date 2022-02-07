@@ -6,8 +6,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-
-	"github.com/impact-eintr/enet/iface"
 )
 
 type Server struct {
@@ -20,19 +18,19 @@ type Server struct {
 	// 服务器绑定的端口
 	Port int
 	// 当前Server的消息管理模块，用来绑定MsgId和对应的处理方法
-	msgHandler iface.IMsgHandle
+	msgHandler IMsgHandle
 	// 当前Server的链接管理器
-	ConnMgr iface.IConnManager
+	ConnMgr IConnManager
 	// =======================
 	//新增两个hook函数原型
 
 	// 该Server的连接创建时Hook函数
-	OnConnStart func(conn iface.IConnection)
+	OnConnStart func(conn IConnection)
 	// 该Server的连接断开时的Hook函数
-	OnConnStop func(conn iface.IConnection)
+	OnConnStop func(conn IConnection)
 }
 
-func NewServer(network string) iface.IServer {
+func NewServer(network string) IServer {
 	s := &Server{
 		Name:       GlobalObject.Name,
 		IPVersion:  network,
@@ -57,68 +55,49 @@ func (s *Server) Start() {
 		s.msgHandler.StartWorkerPool()
 
 		// 2 监听服务器地址/开启udp服务
-		if s.IPVersion[0] == 't' {
-			// ========================= TCP业务 ==========================
-			var err error
-			listener, err := net.ListenTCP(s.IPVersion,
-				&net.TCPAddr{IP: net.ParseIP(s.IP), Port: s.Port})
+		// ========================= TCP业务 ==========================
+		var err error
+		listener, err := net.ListenTCP(s.IPVersion,
+			&net.TCPAddr{IP: net.ParseIP(s.IP), Port: s.Port})
+		if err != nil {
+			fmt.Println("listen", s.IPVersion, "err", err)
+			return
+		}
+
+		// 已经监听成功
+		if _, ok := os.LookupEnv("enet_debug"); ok {
+			fmt.Println("start enet server  ", s.Name, " succ, now listenning...")
+		}
+		// TODO server.go 应该有一个自动生成ID的方法
+		var cid uint32
+		cid = 0
+
+		// 启动server网络连接业务
+		for {
+			conn, err := listener.AcceptTCP()
 			if err != nil {
-				fmt.Println("listen", s.IPVersion, "err", err)
-				return
-			}
-
-			// 已经监听成功
-			if _, ok := os.LookupEnv("enet_debug"); ok {
-				fmt.Println("start enet server  ", s.Name, " succ, now listenning...")
-			}
-			// TODO server.go 应该有一个自动生成ID的方法
-			var cid uint32
-			cid = 0
-
-			// 启动server网络连接业务
-			for {
-				conn, err := listener.AcceptTCP()
-				if err != nil {
-					if nerr, ok := err.(net.Error); ok && nerr.Temporary() {
-						fmt.Printf("temporary Accept() failure - %s", err)
-						runtime.Gosched()
-						continue
-					}
-					// theres no direct way to detect this error because it is not exposed
-					if !strings.Contains(err.Error(), "use of closed network connection") {
-						fmt.Printf("listener.Accept() error - %s", err)
-					}
-					break
-				}
-				//  设置服务器最大链接控制
-				if s.ConnMgr.Len() >= GlobalObject.MaxConn {
-					conn.Close()
+				if nerr, ok := err.(net.Error); ok && nerr.Temporary() {
+					fmt.Printf("temporary Accept() failure - %s", err)
+					runtime.Gosched()
 					continue
 				}
-
-				dealConn := NewTcpConntion(s, conn, cid, s.msgHandler)
-				cid++
-
-				// 开始处理业务
-				go dealConn.Start()
+				// theres no direct way to detect this error because it is not exposed
+				if !strings.Contains(err.Error(), "use of closed network connection") {
+					fmt.Printf("listener.Accept() error - %s", err)
+				}
+				break
 			}
-		} else if s.IPVersion[0] == 'u' {
-			// ========================= UDP业务 ==========================
-			udpConn, err := net.ListenUDP(s.IPVersion,
-				&net.UDPAddr{IP: net.ParseIP(s.IP), Port: s.Port})
-			if err != nil {
-				fmt.Println(err)
-				return
+			//  设置服务器最大链接控制
+			if s.ConnMgr.Len() >= GlobalObject.MaxConn {
+				conn.Close()
+				continue
 			}
-			//fmt.Printf("Local: <%s> \n", udpConn.LocalAddr().String())
 
-			// udp不设置连接控制
-			dealConn := NewUdpConntion(s, udpConn, 0, s.msgHandler)
+			dealConn := NewConntion(s, conn, cid, s.msgHandler)
+			cid++
 
 			// 开始处理业务
 			go dealConn.Start()
-		} else {
-			panic("invalid type")
 		}
 	}()
 }
@@ -139,27 +118,27 @@ func (s *Server) Serve() {
 	}
 }
 
-func (s *Server) AddRouter(msgId uint32, router iface.IRouter) {
+func (s *Server) AddRouter(msgId uint32, router IRouter) {
 	s.msgHandler.AddRouter(msgId, router)
 }
 
 // 得到链接管理
-func (s *Server) GetConnMgr() iface.IConnManager {
+func (s *Server) GetConnMgr() IConnManager {
 	return s.ConnMgr
 }
 
 //设置该Server的连接创建时Hook函数
-func (s *Server) SetOnConnStart(hookFunc func(iface.IConnection)) {
+func (s *Server) SetOnConnStart(hookFunc func(IConnection)) {
 	s.OnConnStart = hookFunc
 }
 
 //设置该Server的连接断开时的Hook函数
-func (s *Server) SetOnConnStop(hookFunc func(iface.IConnection)) {
+func (s *Server) SetOnConnStop(hookFunc func(IConnection)) {
 	s.OnConnStop = hookFunc
 }
 
 //调用连接OnConnStart Hook函数
-func (s *Server) CallOnConnStart(conn iface.IConnection) {
+func (s *Server) CallOnConnStart(conn IConnection) {
 	if s.OnConnStart != nil {
 		fmt.Println("---> CallOnConnStart....")
 		s.OnConnStart(conn)
@@ -167,7 +146,7 @@ func (s *Server) CallOnConnStart(conn iface.IConnection) {
 }
 
 //调用连接OnConnStop Hook函数
-func (s *Server) CallOnConnStop(conn iface.IConnection) {
+func (s *Server) CallOnConnStop(conn IConnection) {
 	if s.OnConnStop != nil {
 		fmt.Println("---> CallOnConnStop....")
 		s.OnConnStop(conn)

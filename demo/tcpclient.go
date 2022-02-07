@@ -19,17 +19,16 @@ func main() {
 		fmt.Println("client start err, exit!", err)
 		return
 	}
+	//发封包message消息
+	dp := enet.GetDataPack()
+	msg, _ := dp.Pack(enet.NewMsgPackage(1, []byte("enet V1.0 Client Test Message")))
+	_, err = conn.Write(msg)
+	if err != nil {
+		fmt.Println("write error err ", err)
+		return
+	}
 
 	for {
-		//发封包message消息
-		dp := enet.GetDataPack()
-		msg, _ := dp.Pack(enet.NewMsgPackage(1, []byte("enet V1.0 Client Test Message")))
-		_, err := conn.Write(msg)
-		if err != nil {
-			fmt.Println("write error err ", err)
-			return
-		}
-
 		//先读出流中的head部分
 		headData := make([]byte, dp.GetHeadLen())
 		_, err = io.ReadFull(conn, headData) //ReadFull 会把msg填充满为止
@@ -58,8 +57,6 @@ func main() {
 
 			fmt.Println("==> Recv Msg: ID=", msg.Id, ", len=", msg.DataLen, ", data=", string(msg.Data))
 		}
-
-		time.Sleep(1 * time.Second)
 	}
 
 }

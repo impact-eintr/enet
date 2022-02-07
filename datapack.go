@@ -5,8 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"sync"
-
-	"github.com/impact-eintr/enet/iface"
 )
 
 // 封包拆包类实例，暂时不需要成员
@@ -30,7 +28,7 @@ func (dp *DataPack) GetHeadLen() uint32 {
 }
 
 // 封包方法(压缩数据)
-func (dp *DataPack) Pack(msg iface.IMessage) ([]byte, error) {
+func (dp *DataPack) Pack(msg IMessage) ([]byte, error) {
 	//创建一个存放bytes字节的缓冲
 	dataBuff := bytes.NewBuffer([]byte{})
 
@@ -53,7 +51,7 @@ func (dp *DataPack) Pack(msg iface.IMessage) ([]byte, error) {
 }
 
 // 拆包方法(解压数据)
-func (dp *DataPack) Unpack(binaryData []byte) (iface.IMessage, error) {
+func (dp *DataPack) Unpack(binaryData []byte) (IMessage, error) {
 	//创建一个从输入二进制数据的ioReader
 	dataBuff := bytes.NewReader(binaryData)
 
@@ -79,14 +77,14 @@ func (dp *DataPack) Unpack(binaryData []byte) (iface.IMessage, error) {
 	return msg, nil
 }
 
-func (dp *DataPack) Decode(buf []byte) iface.IMessage {
+func (dp *DataPack) Decode(buf []byte) IMessage {
 	// 解码 构建消息
 	msgId := binary.BigEndian.Uint32(buf[0:4])
 	msg := &Message{Data: buf[4:], Id: msgId}
 	return msg
 }
 
-func (dp *DataPack) Encode(msg iface.IMessage) []byte {
+func (dp *DataPack) Encode(msg IMessage) []byte {
 	buf := make([]byte, msg.GetDataLen()+4)
 	binary.BigEndian.PutUint32(buf[0:4], msg.GetMsgId())
 	copy(buf[4:], msg.GetData())
